@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+@import 'tailwindcss';
+@plugin "tailwindcss-animate";
+
+@theme {
+  --color-primary: #7A0019;
+  --color-secondary: #F7F7F7;
+  --color-success: #00A86B;
+  --color-warning: #F59E0B;
+  --color-danger: #DC2626;
+  --color-coxia-dark: #1F1F1F;
+  --color-coxia-light: #FFFFFF;
+  --color-coxia-gray: #E5E7EB;
+  --color-coxia-text: #374151;
+
+  --font-sans: 'Inter', sans-serif;
+  --font-serif: 'Playfair Display', serif;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-secondary);
+    color: var(--color-coxia-text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-serif);
+    color: var(--color-coxia-dark);
+    font-weight: 700;
+  }
+}
+
+@media print {
+  body {
+    background: white;
+    color: black;
+  }
+  aside, nav, header, button, select, input, .print-hidden {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  main, .container {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  .bg-white {
+    box-shadow: none !important;
+    border: none !important;
+  }
+  @page { margin: 1cm; }
+}

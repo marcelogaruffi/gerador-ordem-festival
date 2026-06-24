@@ -201,8 +201,24 @@ function ApresentacaoPage() {
         <h2 className="text-7xl font-serif font-bold mb-4">{currentChoreo?.name}</h2>
         <p className="text-3xl text-gray-400 mb-16">{currentChoreo?.style || 'Sem estilo'} </p>
 
-        <div className="text-[12rem] font-bold leading-none tabular-nums text-white mb-12 drop-shadow-2xl">
-          {formatTime(timeLeft)}
+        <div className="flex flex-col md:flex-row gap-12 md:gap-32 items-center justify-center mb-12 w-full max-w-6xl mx-auto">
+          {/* Cronômetro Progressivo */}
+          <div className="flex flex-col items-center flex-1">
+            <span className="text-gray-500 uppercase tracking-widest text-xl mb-4 font-bold">Decorrido</span>
+            <div className="text-[8rem] md:text-[10rem] font-bold leading-none tabular-nums text-white drop-shadow-2xl">
+              {formatTime(parseDuration(currentChoreo?.duration) - timeLeft)}
+            </div>
+          </div>
+
+          <div className="hidden md:block w-px h-48 bg-gray-800"></div>
+
+          {/* Cronômetro Regressivo */}
+          <div className="flex flex-col items-center flex-1">
+            <span className="text-gray-500 uppercase tracking-widest text-xl mb-4 font-bold">Restante</span>
+            <div className="text-[8rem] md:text-[10rem] font-bold leading-none tabular-nums text-primary drop-shadow-2xl">
+              {formatTime(timeLeft)}
+            </div>
+          </div>
         </div>
 
         {/* Controls */}

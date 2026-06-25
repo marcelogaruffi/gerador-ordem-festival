@@ -17,8 +17,18 @@ function PagamentosPage() {
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false)
   const [selectedDancerForAssign, setSelectedDancerForAssign] = useState<any>(null)
   
-  const [assignForm, setAssignForm] = useState({
-    selectedCostumes: [] as any[],
+  const [assignForm, setAssignForm] = useState<{
+    assignmentId: string | null,
+    selectedCostumes: any[], 
+    discount: number, 
+    includeSpectacleFee: boolean,
+    spectacleFeeExempt: boolean,
+    total_value: string, 
+    installments_count: number,
+    initial_due_date: string
+  }>({
+    assignmentId: null,
+    selectedCostumes: [],
     discount: 0,
     includeSpectacleFee: false,
     spectacleFeeExempt: false,
@@ -104,56 +114,85 @@ function PagamentosPage() {
         desc = desc ? `${desc} + Taxa de Espetáculo (Isento)` : 'Taxa de Espetáculo (Isento)'
       }
 
-      // 1. Create Assignment
-      const { data: assignmentData, error: assignmentError } = await supabase
-        .from('costume_assignments')
-        .insert([{
-          dancer_id: selectedDancerForAssign.id,
-          costume_name: desc,
-          total_value: totalValue,
-          installments_count: assignForm.installments_count
-        }])
-        .select()
-        .single()
-        
-      if (assignmentError) throw assignmentError
+      let assignmentId = assignForm.assignmentId;
 
-      // 2. Create Installments
-      const totalValueNum = parseFloat(totalValue.toString())
-      const amountPerInstallment = Math.floor((totalValueNum / assignForm.installments_count) * 100) / 100
-      const installments = []
-      
-      let currentSum = 0;
-      for (let i = 1; i <= assignForm.installments_count; i++) {
-        // Use the initial due date
-        const dueDate = new Date(assignForm.initial_due_date)
-        dueDate.setUTCMonth(dueDate.getUTCMonth() + i - 1)
-        
-        let instAmount = amountPerInstallment;
-        if (i === assignForm.installments_count) {
-          instAmount = parseFloat((totalValueNum - currentSum).toFixed(2))
-        }
-        currentSum += instAmount;
-
-        installments.push({
-          assignment_id: assignmentData.id,
-          installment_number: i,
-          amount: instAmount,
-          due_date: dueDate.toISOString().split('T')[0],
-          status: 'Pendente'
-        })
+      if (assignmentId) {
+        // Edit existing assignment
+        const { error: updateError } = await supabase
+          .from('costume_assignments')
+          .update({
+            costume_name: desc,
+            total_value: totalValue,
+            installments_count: assignForm.installments_count
+          })
+          .eq('id', assignmentId)
+        if (updateError) throw updateError
+      } else {
+        // Create new Assignment
+        const { data: assignmentData, error: assignmentError } = await supabase
+          .from('costume_assignments')
+          .insert([{
+            dancer_id: selectedDancerForAssign.id,
+            costume_name: desc,
+            total_value: totalValue,
+            installments_count: assignForm.installments_count
+          }])
+          .select()
+          .single()
+          
+        if (assignmentError) throw assignmentError
+        assignmentId = assignmentData.id
       }
 
-      const { error: installmentsError } = await supabase
-        .from('costume_installments')
-        .insert(installments)
+      // 2. Re-calculate Installments
+      const { data: existingInst } = await supabase.from('costume_installments').select('*').eq('assignment_id', assignmentId).order('installment_number', { ascending: true })
+      
+      const paidInst = (existingInst || []).filter(i => i.status === 'Pago')
+      const sumPaid = paidInst.reduce((acc, i) => acc + parseFloat(i.paid_amount || i.amount), 0)
+      
+      const remainingValue = totalValue - sumPaid;
+      const pendingCount = assignForm.installments_count - paidInst.length;
 
-      if (installmentsError) throw installmentsError
+      // Delete all pending to recreate them
+      await supabase.from('costume_installments').delete().eq('assignment_id', assignmentId).eq('status', 'Pendente')
+
+      if (pendingCount > 0) {
+        const amountPerInstallment = Math.floor((remainingValue / pendingCount) * 100) / 100
+        const newInstallments = []
+        let currentSum = 0;
+        
+        let startNumber = paidInst.length > 0 ? Math.max(...paidInst.map(i => i.installment_number)) + 1 : 1;
+
+        for (let i = 1; i <= pendingCount; i++) {
+          const dueDate = new Date(assignForm.initial_due_date)
+          dueDate.setUTCMonth(dueDate.getUTCMonth() + startNumber + i - 2)
+          
+          let instAmount = amountPerInstallment;
+          if (i === pendingCount) {
+            instAmount = parseFloat((remainingValue - currentSum).toFixed(2))
+          }
+          currentSum += instAmount;
+
+          newInstallments.push({
+            assignment_id: assignmentId,
+            installment_number: startNumber + i - 1,
+            amount: instAmount > 0 ? instAmount : 0,
+            due_date: dueDate.toISOString().split('T')[0],
+            status: 'Pendente'
+          })
+        }
+
+        const { error: installmentsError } = await supabase
+          .from('costume_installments')
+          .insert(newInstallments)
+
+        if (installmentsError) throw installmentsError
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dancers_finance'] })
       setIsAssignModalOpen(false)
-      setAssignForm({ selectedCostumes: [], discount: 0, total_value: '', installments_count: 1, initial_due_date: new Date().toISOString().split('T')[0] })
+      setAssignForm({ assignmentId: null, selectedCostumes: [], discount: 0, includeSpectacleFee: false, spectacleFeeExempt: false, total_value: '', installments_count: 1, initial_due_date: new Date().toISOString().split('T')[0] })
     },
     onError: (error: any) => {
       alert(`Erro ao vincular figurino: ${error.message || 'Verifique sua conexão ou banco de dados.'}`)
@@ -228,7 +267,30 @@ function PagamentosPage() {
   const openAssignModal = (dancer: any, e: React.MouseEvent) => {
     e.stopPropagation()
     setSelectedDancerForAssign(dancer)
-    setAssignForm({ selectedCostumes: [], discount: 0, includeSpectacleFee: false, spectacleFeeExempt: false, total_value: '', installments_count: 1, initial_due_date: new Date().toISOString().split('T')[0] })
+
+    const existingAssignment = dancer.costume_assignments && dancer.costume_assignments.length > 0 
+      ? dancer.costume_assignments[0] 
+      : null;
+
+    if (existingAssignment) {
+      const selectedCostumes = costumes?.filter(c => existingAssignment.costume_name.includes(c.name)) || []
+      const includeFee = existingAssignment.costume_name.includes('Taxa de Espetáculo')
+      const exemptFee = existingAssignment.costume_name.includes('(Isento)')
+      
+      setAssignForm({
+        assignmentId: existingAssignment.id,
+        selectedCostumes,
+        discount: 0,
+        includeSpectacleFee: includeFee,
+        spectacleFeeExempt: exemptFee,
+        total_value: existingAssignment.total_value.toString(),
+        installments_count: existingAssignment.installments_count,
+        initial_due_date: existingAssignment.costume_installments?.[0]?.due_date || new Date().toISOString().split('T')[0]
+      })
+    } else {
+      setAssignForm({ assignmentId: null, selectedCostumes: [], discount: 0, includeSpectacleFee: false, spectacleFeeExempt: false, total_value: '', installments_count: 1, initial_due_date: new Date().toISOString().split('T')[0] })
+    }
+
     setIsAssignModalOpen(true)
   }
 
@@ -430,7 +492,7 @@ function PagamentosPage() {
                                         {inst.status}
                                       </span>
                                     </div>
-                                    <div className="text-xl font-bold text-gray-800 mb-1">{formatCurrency(inst.amount)}</div>
+                                    <div className="text-xl font-bold text-gray-800 mb-1">{formatCurrency(inst.status === 'Pago' ? (inst.paid_amount || inst.amount) : inst.amount)}</div>
                                     <div className="text-xs text-gray-500 mb-4">
                                       Vencimento: {new Date(inst.due_date).toLocaleDateString('pt-BR')}
                                     </div>
@@ -474,7 +536,7 @@ function PagamentosPage() {
                                         title="Clique para editar ou reverter"
                                       >
                                         <div className="flex items-center gap-1"><Check size={16} /> Pago em {new Date(inst.paid_at).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</div>
-                                        <span className="text-xs text-success/70 font-normal">Editar ({formatCurrency(inst.paid_amount || inst.amount)})</span>
+                                        <span className="text-xs text-success/70 font-normal">Editar Pagamento</span>
                                       </div>
                                     )}
                                   </div>

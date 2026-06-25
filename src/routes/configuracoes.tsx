@@ -201,19 +201,6 @@ function SettingsPage() {
                 </div>
               </div>
               <p className="text-xs text-gray-500 mt-2">Esta chave será utilizada para gerar os QR Codes de cobrança no módulo financeiro.</p>
-              
-              <div className="mt-6 pt-6 border-t border-gray-100">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Taxa de Espetáculo Padrão (R$)</label>
-                <input 
-                  type="number" 
-                  step="0.01"
-                  value={spectacleFee}
-                  onChange={(e) => setSpectacleFee(e.target.value)}
-                  placeholder="Ex: 150.00"
-                  className="w-full md:w-1/2 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20 transition-all text-gray-700"
-                />
-                <p className="text-xs text-gray-500 mt-2">Valor predefinido sugerido ao cobrar a Taxa de Espetáculo dos alunos.</p>
-              </div>
             </div>
 
             <div className="p-6 bg-gray-50 flex justify-end gap-3">

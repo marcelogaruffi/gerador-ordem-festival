@@ -35,13 +35,19 @@ function PagamentosPage() {
   
   const [pixModal, setPixModal] = useState<{isOpen: boolean, payload: string, amount: number, pixKey: string, pixKeyType: string}>({ isOpen: false, payload: '', amount: 0, pixKey: '', pixKeyType: 'CPF/CNPJ' })
 
-  // Fetch Settings for PIX
-  const { data: settings } = useQuery({
-    queryKey: ['settings_pix'],
+  // Fetch Settings for PIX and active festival
+  const { data: globalData } = useQuery({
+    queryKey: ['settings_and_festival'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('settings').select('pix_key, pix_key_type, spectacle_fee').eq('id', 1).single()
-      if (error && error.code !== 'PGRST116') throw error
-      return data || { pix_key: '', pix_key_type: 'CPF/CNPJ', spectacle_fee: 0 }
+      const [{ data: setts }, { data: fests }] = await Promise.all([
+        supabase.from('settings').select('pix_key, pix_key_type').eq('id', 1).single(),
+        supabase.from('festivals').select('spectacle_fee').in('status', ['Planejamento', 'Em andamento']).order('created_at', { ascending: false }).limit(1)
+      ])
+      return {
+        pix_key: setts?.pix_key || '',
+        pix_key_type: setts?.pix_key_type || 'CPF/CNPJ',
+        spectacle_fee: fests?.[0]?.spectacle_fee || 0
+      }
     }
   })
 
@@ -230,8 +236,8 @@ function PagamentosPage() {
     const sum = selected.reduce((acc, c) => acc + (parseFloat(c.price) || 0), 0)
     const discountedSum = sum * (1 - discount / 100)
     let finalTotal = discountedSum
-    if (includeFee && !exemptFee && settings?.spectacle_fee) {
-      finalTotal += parseFloat(settings.spectacle_fee)
+    if (includeFee && !exemptFee && globalData?.spectacle_fee) {
+      finalTotal += parseFloat(globalData.spectacle_fee)
     }
     return finalTotal > 0 ? finalTotal.toFixed(2) : ''
   }
@@ -279,6 +285,22 @@ function PagamentosPage() {
       spectacleFeeExempt: exempt,
       total_value: recalculateTotal(prev.selectedCostumes, prev.discount, prev.includeSpectacleFee, exempt)
     }))
+  }
+
+  const parseMoneyValue = (val: string) => {
+    if (!val) return 0
+    return parseFloat(val.replace(/[R$\s\.]/g, '').replace(',', '.'))
+  }
+
+  const handleMoneyInput = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
+    let value = e.target.value.replace(/\D/g, '')
+    if (!value) {
+      setter('')
+      return
+    }
+    const numberValue = parseInt(value, 10) / 100
+    const formatted = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numberValue)
+    setter(formatted)
   }
 
   const handleAssignSubmit = (e: React.FormEvent) => {
@@ -418,7 +440,7 @@ function PagamentosPage() {
                                         <button 
                                           onClick={() => {
                                             setPayModal({ isOpen: true, installment: inst })
-                                            setPayForm({ paid_at: new Date().toISOString().split('T')[0], paid_amount: inst.amount.toString() })
+                                            setPayForm({ paid_at: new Date().toISOString().split('T')[0], paid_amount: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseFloat(inst.amount)) })
                                           }}
                                           className="w-full flex items-center justify-center gap-2 bg-primary/10 text-primary hover:bg-primary hover:text-white transition-colors py-2 rounded-lg text-sm font-medium"
                                         >
@@ -447,7 +469,7 @@ function PagamentosPage() {
                                         className="w-full flex flex-col items-center justify-center gap-1 text-success py-2 text-sm font-medium cursor-pointer hover:bg-success/10 rounded-lg transition-colors border border-transparent hover:border-success/20"
                                         onClick={() => {
                                           setPayModal({ isOpen: true, installment: inst })
-                                          setPayForm({ paid_at: new Date(inst.paid_at).toISOString().split('T')[0], paid_amount: (inst.paid_amount || inst.amount).toString() })
+                                          setPayForm({ paid_at: inst.paid_at ? new Date(inst.paid_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0], paid_amount: inst.paid_amount ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseFloat(inst.paid_amount)) : '' })
                                         }}
                                         title="Clique para editar ou reverter"
                                       >
@@ -501,7 +523,7 @@ function PagamentosPage() {
                 )}
               </div>
 
-              {settings?.spectacle_fee > 0 && (
+              {globalData?.spectacle_fee > 0 && (
                 <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-3">
                   <label className="flex items-center gap-3 cursor-pointer">
                     <input 
@@ -512,7 +534,7 @@ function PagamentosPage() {
                     />
                     <div className="flex-1">
                       <span className="block text-sm font-medium text-gray-800">Cobrar Taxa de Espetáculo</span>
-                      <span className="block text-xs text-gray-500">Adiciona o valor padrão ({formatCurrency(settings.spectacle_fee)}) ao pacote.</span>
+                      <span className="block text-xs text-gray-500">Adiciona o valor do festival ({formatCurrency(globalData.spectacle_fee)}) ao pacote.</span>
                     </div>
                   </label>
 
@@ -617,7 +639,7 @@ function PagamentosPage() {
             
             <form onSubmit={(e) => { 
               e.preventDefault(); 
-              payMutation.mutate({ id: payModal.installment.id, paid_at: new Date(payForm.paid_at).toISOString(), paid_amount: parseFloat(payForm.paid_amount) }) 
+              payMutation.mutate({ id: payModal.installment.id, paid_at: new Date(payForm.paid_at).toISOString(), paid_amount: parseMoneyValue(payForm.paid_amount) }) 
             }} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Data do Pagamento</label>
@@ -633,11 +655,10 @@ function PagamentosPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Valor Recebido (R$)</label>
                 <input 
-                  type="number" 
-                  step="0.01"
+                  type="text" 
                   required
                   value={payForm.paid_amount}
-                  onChange={e => setPayForm({...payForm, paid_amount: e.target.value})}
+                  onChange={e => handleMoneyInput(e, val => setPayForm({...payForm, paid_amount: val}))}
                   className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20"
                 />
               </div>

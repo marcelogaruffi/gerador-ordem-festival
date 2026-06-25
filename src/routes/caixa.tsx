@@ -34,12 +34,28 @@ function CaixaPage() {
     }
   })
 
+  const parseMoneyValue = (val: string) => {
+    if (!val) return 0
+    return parseFloat(val.replace(/[R$\s\.]/g, '').replace(',', '.'))
+  }
+
+  const handleMoneyInput = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
+    let value = e.target.value.replace(/\D/g, '')
+    if (!value) {
+      setter('')
+      return
+    }
+    const numberValue = parseInt(value, 10) / 100
+    const formatted = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numberValue)
+    setter(formatted)
+  }
+
   // Mutation to save an expense
   const saveExpenseMutation = useMutation({
     mutationFn: async () => {
       const payload = {
         description: expenseForm.description,
-        amount: parseFloat(expenseForm.amount),
+        amount: parseMoneyValue(expenseForm.amount),
         due_date: expenseForm.due_date,
       }
       if (expenseForm.id) {
@@ -246,7 +262,7 @@ function CaixaPage() {
                         )}
                         <button 
                           onClick={() => {
-                            setExpenseForm({ id: expense.id, description: expense.description, amount: expense.amount.toString(), due_date: expense.due_date })
+                            setExpenseForm({ id: expense.id, description: expense.description, amount: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(expense.amount), due_date: expense.due_date })
                             setIsExpenseModalOpen(true)
                           }}
                           className="p-2 text-gray-400 hover:text-primary bg-gray-50 hover:bg-primary/10 rounded-lg transition-colors"
@@ -298,12 +314,11 @@ function CaixaPage() {
                 <div className="flex-1">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Valor (R$)</label>
                   <input 
-                    type="number" 
-                    step="0.01"
+                    type="text" 
                     required
                     value={expenseForm.amount}
-                    onChange={e => setExpenseForm({...expenseForm, amount: e.target.value})}
-                    placeholder="0.00"
+                    onChange={e => handleMoneyInput(e, val => setExpenseForm({...expenseForm, amount: val}))}
+                    placeholder="R$ 0,00"
                     className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20"
                   />
                 </div>

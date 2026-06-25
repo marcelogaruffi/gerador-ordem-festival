@@ -1,8 +1,11 @@
-import React from 'react'
-import { Link } from '@tanstack/react-router'
-import { LayoutDashboard, Calendar, Users, Music, Shirt, AlertTriangle, Settings, LogOut, ListOrdered, PlaySquare, Link2, GraduationCap, UserCheck, DollarSign, Wallet } from 'lucide-react'
+import React, { useState } from 'react'
+import { Link, useLocation } from '@tanstack/react-router'
+import { LayoutDashboard, Calendar, Users, Music, Shirt, AlertTriangle, Settings, LogOut, ListOrdered, PlaySquare, Link2, GraduationCap, UserCheck, DollarSign, Wallet, ChevronDown, ChevronRight, PieChart } from 'lucide-react'
 
 export function Sidebar() {
+  const location = useLocation()
+  const [isFinanceOpen, setIsFinanceOpen] = useState(location.pathname.includes('/pagamentos') || location.pathname.includes('/caixa'))
+
   const navItems = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/festivais', icon: Calendar, label: 'Festivais' },
@@ -11,8 +14,6 @@ export function Sidebar() {
     { to: '/aulas', icon: GraduationCap, label: 'Aulas' },
     { to: '/coreografias', icon: Music, label: 'Coreografias' },
     { to: '/figurinos', icon: Shirt, label: 'Figurinos' },
-    { to: '/pagamentos', icon: DollarSign, label: 'Pagamentos' },
-    { to: '/caixa', icon: Wallet, label: 'Fluxo de Caixa' },
     { to: '/timeline', icon: ListOrdered, label: 'Timeline' },
     { to: '/apresentacao', icon: PlaySquare, label: 'Apresentação' },
   ]
@@ -36,6 +37,41 @@ export function Sidebar() {
             <span className="font-medium">{item.label}</span>
           </Link>
         ))}
+
+        {/* Gestão Financeira Submenu */}
+        <div className="pt-2">
+          <button 
+            onClick={() => setIsFinanceOpen(!isFinanceOpen)}
+            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all text-gray-300 hover:bg-primary/20 hover:text-primary ${isFinanceOpen ? 'bg-primary/10 text-primary' : ''}`}
+          >
+            <div className="flex items-center gap-3">
+              <PieChart size={20} />
+              <span className="font-medium">Gestão Financeira</span>
+            </div>
+            {isFinanceOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          </button>
+          
+          {isFinanceOpen && (
+            <div className="mt-1 flex flex-col gap-1 pl-4 border-l-2 border-gray-800 ml-6">
+              <Link
+                to="/pagamentos"
+                className="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all hover:bg-primary/20 hover:text-primary text-gray-400 text-sm"
+                activeProps={{ className: 'bg-primary/20 text-primary font-medium' }}
+              >
+                <DollarSign size={18} />
+                Recebimentos (Alunos)
+              </Link>
+              <Link
+                to="/caixa"
+                className="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all hover:bg-primary/20 hover:text-primary text-gray-400 text-sm"
+                activeProps={{ className: 'bg-primary/20 text-primary font-medium' }}
+              >
+                <Wallet size={18} />
+                Fluxo de Caixa & Despesas
+              </Link>
+            </div>
+          )}
+        </div>
       </nav>
 
       <div className="p-4 border-t border-gray-800 space-y-2">

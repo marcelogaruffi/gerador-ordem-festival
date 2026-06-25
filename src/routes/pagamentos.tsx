@@ -446,9 +446,9 @@ function PagamentosPage() {
                                         >
                                           <DollarSign size={16} /> Dar Baixa
                                         </button>
-                                        {settings?.pix_key ? (
+                                        {globalData?.pix_key ? (
                                           <button
-                                            onClick={() => setPixModal({ isOpen: true, amount: parseFloat(inst.amount), payload: generatePixPayload(settings.pix_key, parseFloat(inst.amount), 'Coxia', 'Brasil', `FIG${inst.id.substring(0,8)}`), pixKey: settings.pix_key })}
+                                            onClick={() => setPixModal({ isOpen: true, amount: parseFloat(inst.amount), payload: generatePixPayload(globalData.pix_key, parseFloat(inst.amount), 'Coxia', 'Brasil', `FIG${inst.id.substring(0,8)}`), pixKey: globalData.pix_key })}
                                             className="px-3 flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors rounded-lg"
                                             title="Gerar PIX"
                                           >
@@ -496,14 +496,17 @@ function PagamentosPage() {
       {/* Modal Vincular Figurino */}
       {isAssignModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 animate-in zoom-in-95 duration-200">
-            <h2 className="text-xl font-serif text-coxia-dark mb-2">Vincular Figurino</h2>
-            <p className="text-sm text-gray-500 mb-6">Aluno: <strong className="text-gray-800">{selectedDancerForAssign?.name}</strong></p>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-gray-100 flex-shrink-0">
+              <h2 className="text-xl font-serif text-coxia-dark mb-1">Vincular Pagamentos</h2>
+              <p className="text-sm text-gray-500">Aluno: <strong className="text-gray-800">{selectedDancerForAssign?.name}</strong></p>
+            </div>
 
-            <form onSubmit={handleAssignSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Selecione 1 ou mais Figurinos</label>
-                <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded-xl p-3 bg-gray-50">
+            <div className="overflow-y-auto flex-1 p-6">
+              <form id="assignForm" onSubmit={handleAssignSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Selecione 1 ou mais Figurinos</label>
+                  <div className="space-y-2 border border-gray-200 rounded-xl p-3 bg-gray-50">
                   {costumes?.length === 0 && <p className="text-sm text-gray-500">Nenhum figurino cadastrado.</p>}
                   {costumes?.map(c => (
                     <label key={c.id} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors">
@@ -608,23 +611,24 @@ function PagamentosPage() {
                 </p>
               </div>
 
-              <div className="pt-4 flex gap-3">
-                <button 
-                  type="button" 
-                  onClick={() => setIsAssignModalOpen(false)}
-                  className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 font-medium"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={assignMutation.isPending || (assignForm.selectedCostumes.length === 0 && !assignForm.includeSpectacleFee)}
-                  className="flex-1 bg-primary text-white px-4 py-2 rounded-xl hover:bg-primary/90 font-medium disabled:opacity-50"
-                >
-                  {assignMutation.isPending ? 'Salvando...' : 'Vincular'}
-                </button>
-              </div>
-            </form>
+                <div className="pt-4 flex gap-3 sticky bottom-0 bg-white py-4 mt-4 -mx-6 px-6 border-t border-gray-100">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsAssignModalOpen(false)}
+                    className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 font-medium"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    type="submit" 
+                    disabled={assignMutation.isPending || (assignForm.selectedCostumes.length === 0 && !assignForm.includeSpectacleFee)}
+                    className="flex-1 bg-primary text-white px-4 py-2 rounded-xl hover:bg-primary/90 font-medium disabled:opacity-50"
+                  >
+                    {assignMutation.isPending ? 'Salvando...' : 'Vincular'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

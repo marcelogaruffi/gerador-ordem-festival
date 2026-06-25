@@ -62,7 +62,11 @@ function FigurinosPage() {
 
   const insertMutation = useMutation({
     mutationFn: async (newCostume: typeof formData) => {
-      const { data, error } = await supabase.from('costumes').insert([newCostume]).select()
+      const payload = {
+        ...newCostume,
+        price: newCostume.price ? parseFloat(newCostume.price) : 0
+      }
+      const { data, error } = await supabase.from('costumes').insert([payload]).select()
       if (error) throw error
       return data
     },
@@ -78,7 +82,11 @@ function FigurinosPage() {
   const updateMutation = useMutation({
     mutationFn: async (updatedCostume: typeof formData) => {
       if (!editingId) return
-      const { data, error } = await supabase.from('costumes').update(updatedCostume).eq('id', editingId).select()
+      const payload = {
+        ...updatedCostume,
+        price: updatedCostume.price ? parseFloat(updatedCostume.price) : 0
+      }
+      const { data, error } = await supabase.from('costumes').update(payload).eq('id', editingId).select()
       if (error) throw error
       return data
     },

@@ -162,6 +162,26 @@ function SettingsPage() {
               </div>
             </div>
 
+            {/* Integrações / Pagamentos */}
+            <div className="p-6 border-t border-gray-100 bg-white">
+              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <Shield size={20} className="text-primary" />
+                Pagamentos e Recebimentos
+              </h3>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Chave PIX Recebedora</label>
+                <input 
+                  type="text" 
+                  value={pixKey}
+                  onChange={(e) => setPixKey(e.target.value)}
+                  placeholder="E-mail, CPF/CNPJ, Telefone ou Chave Aleatória"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20 transition-all text-gray-700"
+                />
+                <p className="text-xs text-gray-500 mt-2">Esta chave será utilizada para gerar os QR Codes de cobrança de figurinos.</p>
+              </div>
+            </div>
+
             <div className="p-6 bg-gray-50 flex justify-end gap-3">
               <button 
                 type="submit" 

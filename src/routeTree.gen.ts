@@ -19,6 +19,7 @@ import { Route as FestivaisRouteImport } from './routes/festivais'
 import { Route as CoreografiasRouteImport } from './routes/coreografias'
 import { Route as ConflitosRouteImport } from './routes/conflitos'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
+import { Route as CaixaRouteImport } from './routes/caixa'
 import { Route as BailarinosRouteImport } from './routes/bailarinos'
 import { Route as AulasRouteImport } from './routes/aulas'
 import { Route as ApresentacaoRouteImport } from './routes/apresentacao'
@@ -74,6 +75,11 @@ const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
   path: '/configuracoes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CaixaRoute = CaixaRouteImport.update({
+  id: '/caixa',
+  path: '/caixa',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BailarinosRoute = BailarinosRouteImport.update({
   id: '/bailarinos',
   path: '/bailarinos',
@@ -100,6 +106,7 @@ export interface FileRoutesByFullPath {
   '/apresentacao': typeof ApresentacaoRoute
   '/aulas': typeof AulasRoute
   '/bailarinos': typeof BailarinosRoute
+  '/caixa': typeof CaixaRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/conflitos': typeof ConflitosRoute
   '/coreografias': typeof CoreografiasRoute
@@ -116,6 +123,7 @@ export interface FileRoutesByTo {
   '/apresentacao': typeof ApresentacaoRoute
   '/aulas': typeof AulasRoute
   '/bailarinos': typeof BailarinosRoute
+  '/caixa': typeof CaixaRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/conflitos': typeof ConflitosRoute
   '/coreografias': typeof CoreografiasRoute
@@ -133,6 +141,7 @@ export interface FileRoutesById {
   '/apresentacao': typeof ApresentacaoRoute
   '/aulas': typeof AulasRoute
   '/bailarinos': typeof BailarinosRoute
+  '/caixa': typeof CaixaRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/conflitos': typeof ConflitosRoute
   '/coreografias': typeof CoreografiasRoute
@@ -151,6 +160,7 @@ export interface FileRouteTypes {
     | '/apresentacao'
     | '/aulas'
     | '/bailarinos'
+    | '/caixa'
     | '/configuracoes'
     | '/conflitos'
     | '/coreografias'
@@ -167,6 +177,7 @@ export interface FileRouteTypes {
     | '/apresentacao'
     | '/aulas'
     | '/bailarinos'
+    | '/caixa'
     | '/configuracoes'
     | '/conflitos'
     | '/coreografias'
@@ -183,6 +194,7 @@ export interface FileRouteTypes {
     | '/apresentacao'
     | '/aulas'
     | '/bailarinos'
+    | '/caixa'
     | '/configuracoes'
     | '/conflitos'
     | '/coreografias'
@@ -200,6 +212,7 @@ export interface RootRouteChildren {
   ApresentacaoRoute: typeof ApresentacaoRoute
   AulasRoute: typeof AulasRoute
   BailarinosRoute: typeof BailarinosRoute
+  CaixaRoute: typeof CaixaRoute
   ConfiguracoesRoute: typeof ConfiguracoesRoute
   ConflitosRoute: typeof ConflitosRoute
   CoreografiasRoute: typeof CoreografiasRoute
@@ -284,6 +297,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConfiguracoesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/caixa': {
+      id: '/caixa'
+      path: '/caixa'
+      fullPath: '/caixa'
+      preLoaderRoute: typeof CaixaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/bailarinos': {
       id: '/bailarinos'
       path: '/bailarinos'
@@ -320,6 +340,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApresentacaoRoute: ApresentacaoRoute,
   AulasRoute: AulasRoute,
   BailarinosRoute: BailarinosRoute,
+  CaixaRoute: CaixaRoute,
   ConfiguracoesRoute: ConfiguracoesRoute,
   ConflitosRoute: ConflitosRoute,
   CoreografiasRoute: CoreografiasRoute,

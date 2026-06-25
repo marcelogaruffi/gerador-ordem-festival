@@ -20,6 +20,8 @@ function PagamentosPage() {
   const [assignForm, setAssignForm] = useState({
     selectedCostumes: [] as any[],
     discount: 0,
+    includeSpectacleFee: false,
+    spectacleFeeExempt: false,
     total_value: '',
     installments_count: 1,
     initial_due_date: new Date().toISOString().split('T')[0]
@@ -31,15 +33,15 @@ function PagamentosPage() {
     paid_amount: ''
   })
   
-  const [pixModal, setPixModal] = useState<{isOpen: boolean, payload: string, amount: number, pixKey: string}>({ isOpen: false, payload: '', amount: 0, pixKey: '' })
+  const [pixModal, setPixModal] = useState<{isOpen: boolean, payload: string, amount: number, pixKey: string, pixKeyType: string}>({ isOpen: false, payload: '', amount: 0, pixKey: '', pixKeyType: 'CPF/CNPJ' })
 
   // Fetch Settings for PIX
   const { data: settings } = useQuery({
     queryKey: ['settings_pix'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('settings').select('pix_key').eq('id', 1).single()
+      const { data, error } = await supabase.from('settings').select('pix_key, pix_key_type, spectacle_fee').eq('id', 1).single()
       if (error && error.code !== 'PGRST116') throw error
-      return data || { pix_key: '' }
+      return data || { pix_key: '', pix_key_type: 'CPF/CNPJ', spectacle_fee: 0 }
     }
   })
 
@@ -86,14 +88,22 @@ function PagamentosPage() {
   const assignMutation = useMutation({
     mutationFn: async () => {
       const totalValue = parseFloat(assignForm.total_value)
-      if (isNaN(totalValue)) throw new Error("Valor total inválido")
+      if (isNaN(totalValue) || totalValue < 0) throw new Error("Valor total inválido.")
+      if (assignForm.selectedCostumes.length === 0 && !assignForm.includeSpectacleFee) throw new Error("Selecione pelo menos um figurino ou a taxa de espetáculo.")
+
+      let desc = assignForm.selectedCostumes.map(c => c.name).join(', ')
+      if (assignForm.includeSpectacleFee && !assignForm.spectacleFeeExempt) {
+        desc = desc ? `${desc} + Taxa de Espetáculo` : 'Taxa de Espetáculo'
+      } else if (assignForm.includeSpectacleFee && assignForm.spectacleFeeExempt) {
+        desc = desc ? `${desc} + Taxa de Espetáculo (Isento)` : 'Taxa de Espetáculo (Isento)'
+      }
 
       // 1. Create Assignment
       const { data: assignmentData, error: assignmentError } = await supabase
         .from('costume_assignments')
         .insert([{
           dancer_id: selectedDancerForAssign.id,
-          costume_name: assignForm.selectedCostumes.map(c => c.name).join(', '),
+          costume_name: desc,
           total_value: totalValue,
           installments_count: assignForm.installments_count
         }])
@@ -212,8 +222,18 @@ function PagamentosPage() {
   const openAssignModal = (dancer: any, e: React.MouseEvent) => {
     e.stopPropagation()
     setSelectedDancerForAssign(dancer)
-    setAssignForm({ selectedCostumes: [], discount: 0, total_value: '', installments_count: 1, initial_due_date: new Date().toISOString().split('T')[0] })
+    setAssignForm({ selectedCostumes: [], discount: 0, includeSpectacleFee: false, spectacleFeeExempt: false, total_value: '', installments_count: 1, initial_due_date: new Date().toISOString().split('T')[0] })
     setIsAssignModalOpen(true)
+  }
+
+  const recalculateTotal = (selected: any[], discount: number, includeFee: boolean, exemptFee: boolean) => {
+    const sum = selected.reduce((acc, c) => acc + (parseFloat(c.price) || 0), 0)
+    const discountedSum = sum * (1 - discount / 100)
+    let finalTotal = discountedSum
+    if (includeFee && !exemptFee && settings?.spectacle_fee) {
+      finalTotal += parseFloat(settings.spectacle_fee)
+    }
+    return finalTotal > 0 ? finalTotal.toFixed(2) : ''
   }
 
   const handleCostumeToggle = (costume: any) => {
@@ -226,14 +246,10 @@ function PagamentosPage() {
         newSelected = [...prev.selectedCostumes, costume]
       }
       
-      // Auto sum prices
-      const sum = newSelected.reduce((acc, c) => acc + (parseFloat(c.price) || 0), 0)
-      const discountedSum = sum * (1 - prev.discount / 100)
-      
       return {
         ...prev,
         selectedCostumes: newSelected,
-        total_value: discountedSum > 0 ? discountedSum.toFixed(2) : ''
+        total_value: recalculateTotal(newSelected, prev.discount, prev.includeSpectacleFee, prev.spectacleFeeExempt)
       }
     })
   }
@@ -241,14 +257,28 @@ function PagamentosPage() {
   const handleDiscountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseFloat(e.target.value) || 0
     setAssignForm(prev => {
-      const sum = prev.selectedCostumes.reduce((acc, c) => acc + (parseFloat(c.price) || 0), 0)
-      const discountedSum = sum * (1 - val / 100)
       return {
         ...prev,
         discount: val,
-        total_value: discountedSum > 0 ? discountedSum.toFixed(2) : ''
+        total_value: recalculateTotal(prev.selectedCostumes, val, prev.includeSpectacleFee, prev.spectacleFeeExempt)
       }
     })
+  }
+
+  const handleFeeToggle = (include: boolean) => {
+    setAssignForm(prev => ({
+      ...prev,
+      includeSpectacleFee: include,
+      total_value: recalculateTotal(prev.selectedCostumes, prev.discount, include, prev.spectacleFeeExempt)
+    }))
+  }
+
+  const handleExemptToggle = (exempt: boolean) => {
+    setAssignForm(prev => ({
+      ...prev,
+      spectacleFeeExempt: exempt,
+      total_value: recalculateTotal(prev.selectedCostumes, prev.discount, prev.includeSpectacleFee, exempt)
+    }))
   }
 
   const handleAssignSubmit = (e: React.FormEvent) => {
@@ -466,10 +496,42 @@ function PagamentosPage() {
                     </label>
                   ))}
                 </div>
-                {assignForm.selectedCostumes.length === 0 && (
-                  <p className="text-xs text-danger mt-1">Selecione pelo menos um figurino.</p>
+                {assignForm.selectedCostumes.length === 0 && !assignForm.includeSpectacleFee && (
+                  <p className="text-xs text-danger mt-1">Selecione pelo menos um figurino ou a Taxa de Espetáculo.</p>
                 )}
               </div>
+
+              {settings?.spectacle_fee > 0 && (
+                <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-3">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input 
+                      type="checkbox"
+                      checked={assignForm.includeSpectacleFee}
+                      onChange={(e) => handleFeeToggle(e.target.checked)}
+                      className="w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary"
+                    />
+                    <div className="flex-1">
+                      <span className="block text-sm font-medium text-gray-800">Cobrar Taxa de Espetáculo</span>
+                      <span className="block text-xs text-gray-500">Adiciona o valor padrão ({formatCurrency(settings.spectacle_fee)}) ao pacote.</span>
+                    </div>
+                  </label>
+
+                  {assignForm.includeSpectacleFee && (
+                    <label className="flex items-center gap-3 cursor-pointer pl-7">
+                      <input 
+                        type="checkbox"
+                        checked={assignForm.spectacleFeeExempt}
+                        onChange={(e) => handleExemptToggle(e.target.checked)}
+                        className="w-4 h-4 text-warning-dark rounded border-gray-300 focus:ring-warning-dark"
+                      />
+                      <div className="flex-1">
+                        <span className="block text-sm font-medium text-gray-700">Isentar aluno desta taxa</span>
+                        <span className="block text-xs text-gray-500">O valor não será somado, mas a cobrança aparecerá como "Isenta".</span>
+                      </div>
+                    </label>
+                  )}
+                </div>
+              )}
 
               <div className="flex gap-4">
                 <div className="flex-1">
@@ -534,7 +596,7 @@ function PagamentosPage() {
                 </button>
                 <button 
                   type="submit" 
-                  disabled={assignMutation.isPending || assignForm.selectedCostumes.length === 0}
+                  disabled={assignMutation.isPending || (assignForm.selectedCostumes.length === 0 && !assignForm.includeSpectacleFee)}
                   className="flex-1 bg-primary text-white px-4 py-2 rounded-xl hover:bg-primary/90 font-medium disabled:opacity-50"
                 >
                   {assignMutation.isPending ? 'Salvando...' : 'Vincular'}

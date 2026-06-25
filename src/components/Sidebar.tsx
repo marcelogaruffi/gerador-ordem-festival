@@ -1,6 +1,6 @@
 import React from 'react'
 import { Link } from '@tanstack/react-router'
-import { LayoutDashboard, Calendar, Users, Music, Shirt, AlertTriangle, Settings, LogOut, ListOrdered, PlaySquare, Link2, GraduationCap, UserCheck, DollarSign } from 'lucide-react'
+import { LayoutDashboard, Calendar, Users, Music, Shirt, AlertTriangle, Settings, LogOut, ListOrdered, PlaySquare, Link2, GraduationCap, UserCheck, DollarSign, Wallet } from 'lucide-react'
 
 export function Sidebar() {
   const navItems = [
@@ -12,6 +12,7 @@ export function Sidebar() {
     { to: '/coreografias', icon: Music, label: 'Coreografias' },
     { to: '/figurinos', icon: Shirt, label: 'Figurinos' },
     { to: '/pagamentos', icon: DollarSign, label: 'Pagamentos' },
+    { to: '/caixa', icon: Wallet, label: 'Fluxo de Caixa' },
     { to: '/timeline', icon: ListOrdered, label: 'Timeline' },
     { to: '/apresentacao', icon: PlaySquare, label: 'Apresentação' },
   ]

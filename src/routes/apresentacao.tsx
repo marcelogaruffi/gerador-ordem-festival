@@ -214,6 +214,16 @@ function ApresentacaoPage() {
     setTimeLeft(0)
   }
 
+  const handleSeek = (newTime: number) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = newTime
+      setTimeLeft(Math.max(0, audioDuration - newTime))
+    } else {
+      const duration = parseDuration(currentChoreo?.duration) || 0
+      setTimeLeft(Math.max(0, duration - newTime))
+    }
+  }
+
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(err => {
@@ -275,21 +285,6 @@ function ApresentacaoPage() {
           ) : (
             <div className="space-y-4">
               
-              <div className="bg-gray-900 border border-gray-800 p-6 rounded-2xl mb-8 flex flex-col items-center gap-4 text-center">
-                <Music className="text-gray-500" size={32} />
-                <div>
-                  <h3 className="font-bold text-white mb-1">Áudio Local (Opcional)</h3>
-                  <p className="text-sm text-gray-400">Selecione a pasta do seu computador onde estão as músicas. Elas devem começar com o número da ordem (ex: 1.mp3, 2.mp3).</p>
-                </div>
-                <button 
-                  onClick={handleSelectFolder}
-                  className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all ${dirHandle ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-gray-800 text-white hover:bg-gray-700'}`}
-                >
-                  <FolderOpen size={20} />
-                  {dirHandle ? 'Pasta Conectada' : 'Selecionar Pasta de Músicas'}
-                </button>
-              </div>
-
               {festivals?.map(fest => (
                 <button
                   key={fest.id}
@@ -404,43 +399,59 @@ function ApresentacaoPage() {
       {role === 'operator' ? (
         <>
           {/* Main Content (OPERATOR) */}
-          <div className="flex-1 flex flex-col items-center justify-center p-12 text-center">
+          <div className="flex-1 flex flex-col p-12">
             
-            <p className="text-xl text-primary font-bold tracking-widest uppercase mb-4">No Palco Agora</p>
-            <h2 className="text-7xl font-serif font-bold mb-4">{currentChoreo?.name}</h2>
-            <p className="text-3xl text-gray-400 mb-16">{currentChoreo?.style || 'Sem estilo'} </p>
-
-            <div className="flex flex-col md:flex-row gap-12 md:gap-32 items-center justify-center mb-12 w-full max-w-6xl mx-auto">
-              {/* Cronômetro Progressivo */}
-              <div className="flex flex-col items-center flex-1">
-                <span className="text-gray-500 uppercase tracking-widest text-xl mb-4 font-bold">Decorrido</span>
-                <div className="text-[8rem] md:text-[10rem] font-bold leading-none tabular-nums text-white drop-shadow-2xl">
-                  {formatTime(audioUrl ? audioDuration - timeLeft : parseDuration(currentChoreo?.duration) - timeLeft)}
-                </div>
+            {/* Top Bar: Connect Folder */}
+            <div className="flex justify-between items-start mb-8">
+              <div>
+                <p className="text-sm text-primary font-bold tracking-widest uppercase mb-2">No Palco Agora</p>
+                <h2 className="text-5xl font-serif font-bold mb-2">{currentChoreo?.name}</h2>
+                <p className="text-xl text-gray-400">{currentChoreo?.style || 'Sem estilo'} </p>
               </div>
-
-              <div className="hidden md:block w-px h-48 bg-gray-800"></div>
-
-              {/* Cronômetro Regressivo */}
-              <div className="flex flex-col items-center flex-1 relative">
-                {dirHandle && (
-                  <div className="absolute -top-12 flex items-center gap-2 px-4 py-1.5 rounded-full bg-gray-900 border border-gray-800 text-sm">
-                    <Music size={14} className={audioUrl ? "text-primary" : "text-gray-500"} />
-                    <span className={audioUrl ? "text-primary font-medium" : "text-gray-500"}>
-                      {audioUrl ? 'Áudio Vinculado' : 'Sem Áudio (1.mp3)'}
-                    </span>
-                  </div>
-                )}
-                <span className="text-gray-500 uppercase tracking-widest text-xl mb-4 font-bold">Restante</span>
-                <div className="text-[8rem] md:text-[10rem] font-bold leading-none tabular-nums text-primary drop-shadow-2xl">
-                  {formatTime(timeLeft)}
-                </div>
-              </div>
+              
+              <button 
+                onClick={handleSelectFolder}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${dirHandle ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-gray-900 text-gray-300 hover:bg-gray-800 border border-gray-800 hover:border-primary'}`}
+              >
+                <FolderOpen size={18} />
+                {dirHandle ? 'Pasta Conectada' : 'Selecionar Pasta de Músicas'}
+              </button>
             </div>
 
+            {/* Dashboard Player */}
+            <div className="bg-gray-900 border border-gray-800 rounded-3xl p-8 max-w-4xl w-full mx-auto shadow-2xl">
+              
+              {/* Audio Status */}
+              <div className="flex items-center justify-center gap-2 mb-6 text-sm">
+                <Music size={16} className={audioUrl ? "text-primary" : "text-gray-500"} />
+                <span className={audioUrl ? "text-primary font-medium" : "text-gray-500"}>
+                  {audioUrl ? 'Áudio Vinculado e Pronto' : (dirHandle ? `Procurando arquivo ${currentIndex + 1}.mp3...` : 'Sem Áudio (Conecte uma pasta)')}
+                </span>
+              </div>
+
+              {/* Scrubber & Timers */}
+              <div className="flex items-center gap-6 mb-8 w-full">
+                <span className="text-2xl font-bold tabular-nums text-gray-300 w-24 text-right">
+                  {formatTime(audioUrl ? audioDuration - timeLeft : parseDuration(currentChoreo?.duration) - timeLeft)}
+                </span>
+                
+                <input 
+                  type="range" 
+                  min="0" 
+                  max={audioDuration || parseDuration(currentChoreo?.duration) || 100}
+                  value={audioDuration ? audioDuration - timeLeft : parseDuration(currentChoreo?.duration) - timeLeft}
+                  onChange={(e) => handleSeek(Number(e.target.value))}
+                  className="flex-1 h-3 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-primary hover:accent-primary/80 transition-all"
+                />
+
+                <span className="text-2xl font-bold tabular-nums text-primary w-24">
+                  -{formatTime(timeLeft)}
+                </span>
+              </div>
+
             {/* Controls */}
-            <div className="flex items-center gap-8">
-              <button onClick={handlePrev} disabled={currentIndex === 0} className="p-6 rounded-full bg-gray-900 hover:bg-gray-800 disabled:opacity-50 transition-all">
+            <div className="flex items-center justify-center gap-8">
+              <button onClick={handlePrev} disabled={currentIndex === 0} className="p-6 rounded-full bg-gray-800 hover:bg-gray-700 disabled:opacity-50 transition-all text-white">
                 <SkipBack size={32} />
               </button>
               
@@ -451,9 +462,10 @@ function ApresentacaoPage() {
                 {isPlaying ? <Pause size={48} /> : <Play size={48} className="ml-2" />}
               </button>
 
-              <button onClick={handleNext} disabled={currentIndex === order.length - 1} className="p-6 rounded-full bg-gray-900 hover:bg-gray-800 disabled:opacity-50 transition-all">
+              <button onClick={handleNext} disabled={currentIndex === order.length - 1} className="p-6 rounded-full bg-gray-800 hover:bg-gray-700 disabled:opacity-50 transition-all text-white">
                 <SkipForward size={32} />
               </button>
+            </div>
             </div>
           </div>
 

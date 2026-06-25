@@ -14,6 +14,8 @@ function ApresentacaoPage() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [timeLeft, setTimeLeft] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [role, setRole] = useState<'operator' | 'viewer' | null>(null)
+  const channelRef = React.useRef<any>(null)
 
   // Local Audio states
   const [dirHandle, setDirHandle] = useState<any>(null)
@@ -136,7 +138,7 @@ function ApresentacaoPage() {
 
   // Timer logic for manual countdown (when no audio is loaded)
   useEffect(() => {
-    if (audioUrl) return // if we have audio, timer is synced to audio element
+    if (audioUrl || role === 'viewer') return // if we have audio or are viewer, timer is handled elsewhere
 
     let interval: any
     if (isPlaying && timeLeft > 0) {
@@ -147,7 +149,42 @@ function ApresentacaoPage() {
       setIsPlaying(false)
     }
     return () => clearInterval(interval)
-  }, [isPlaying, timeLeft, audioUrl])
+  }, [isPlaying, timeLeft, audioUrl, role])
+
+  // Broadcast state to viewers
+  useEffect(() => {
+    if (role === 'operator' && channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'playback_sync',
+        payload: { currentIndex, isPlaying, timeLeft }
+      }).catch(console.error)
+    }
+  }, [currentIndex, isPlaying, timeLeft, role])
+
+  // Setup Supabase Realtime Channel
+  useEffect(() => {
+    if (!selectedFestival || !role) return
+
+    const channel = supabase.channel(`festival_${selectedFestival}`)
+    channelRef.current = channel
+
+    if (role === 'viewer') {
+      channel.on('broadcast', { event: 'playback_sync' }, (payload: any) => {
+        const { currentIndex: newIndex, isPlaying: newPlaying, timeLeft: newTimeLeft } = payload.payload
+        setCurrentIndex(newIndex)
+        setIsPlaying(newPlaying)
+        setTimeLeft(newTimeLeft)
+      }).subscribe()
+    } else if (role === 'operator') {
+      channel.subscribe()
+    }
+
+    return () => {
+      supabase.removeChannel(channel)
+      channelRef.current = null
+    }
+  }, [selectedFestival, role])
 
   // Sync isPlaying with audio element
   useEffect(() => {
@@ -195,6 +232,7 @@ function ApresentacaoPage() {
       document.exitFullscreen()
       setIsFullscreen(false)
     }
+    setRole(null) // Reset role when exiting
   }
 
   const handleNext = () => {
@@ -272,6 +310,52 @@ function ApresentacaoPage() {
     )
   }
 
+  // --- STAGE 1.5: Role Selection Screen ---
+  if (selectedFestival && !role) {
+    return (
+      <div className="fixed inset-0 bg-coxia-dark text-white z-50 flex flex-col items-center justify-center p-8">
+        <button onClick={() => setSelectedFestival(null)} className="absolute top-8 left-8 text-gray-400 hover:text-white transition-colors flex items-center gap-2">
+          <X size={24} /> Voltar aos Festivais
+        </button>
+        
+        <div className="text-center max-w-4xl w-full">
+          <h1 className="text-4xl font-serif text-white mb-2">Escolha seu Papel</h1>
+          <p className="text-gray-400 mb-12">Como você deseja operar esta tela?</p>
+
+          <div className="flex flex-col md:flex-row gap-8 justify-center">
+            {/* Operator Card */}
+            <button 
+              onClick={() => setRole('operator')}
+              className="flex-1 bg-gray-900 hover:bg-primary/20 border border-gray-800 hover:border-primary p-8 rounded-3xl transition-all flex flex-col items-center gap-6 group text-center"
+            >
+              <div className="p-6 bg-gray-800 group-hover:bg-primary/20 rounded-full text-white group-hover:text-primary transition-colors shadow-xl">
+                <Play size={64} className="ml-2" />
+              </div>
+              <div>
+                <h3 className="font-bold text-3xl text-white mb-2">Operador</h3>
+                <p className="text-gray-400">Controla o som, luz e passa as coreografias. Comanda o show inteiro.</p>
+              </div>
+            </button>
+
+            {/* Viewer Card */}
+            <button 
+              onClick={() => setRole('viewer')}
+              className="flex-1 bg-gray-900 hover:bg-primary/20 border border-gray-800 hover:border-primary p-8 rounded-3xl transition-all flex flex-col items-center gap-6 group text-center"
+            >
+              <div className="p-6 bg-gray-800 group-hover:bg-primary/20 rounded-full text-white group-hover:text-primary transition-colors shadow-xl">
+                <Maximize size={64} />
+              </div>
+              <div>
+                <h3 className="font-bold text-3xl text-white mb-2">Telão / Coxia</h3>
+                <p className="text-gray-400">Apenas visualiza a ordem e o cronômetro sincronizado pelo Operador. Ideal para TV no backstage.</p>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // --- STAGE 2: Presentation Screen ---
   if (isTimelineLoading) {
     return <div className="fixed inset-0 bg-black text-white flex items-center justify-center">Carregando show...</div>
@@ -304,7 +388,9 @@ function ApresentacaoPage() {
           <Link to="/" onClick={handleExit} className="p-3 rounded-xl bg-gray-900 hover:bg-danger/20 hover:text-danger text-gray-400 transition-colors" title="Sair do Modo Apresentação">
             <X size={24} />
           </Link>
-          <h1 className="text-3xl font-serif text-primary tracking-widest font-bold">COXIA</h1>
+          <h1 className="text-3xl font-serif text-primary tracking-widest font-bold">
+            COXIA <span className="text-gray-600 text-xl font-normal ml-2 tracking-normal">[{role === 'operator' ? 'Operador' : 'Visualizador'}]</span>
+          </h1>
         </div>
         
         <div className="flex items-center gap-4 text-gray-400 font-medium">
@@ -315,73 +401,119 @@ function ApresentacaoPage() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col items-center justify-center p-12 text-center">
-        
-        <p className="text-xl text-primary font-bold tracking-widest uppercase mb-4">No Palco Agora</p>
-        <h2 className="text-7xl font-serif font-bold mb-4">{currentChoreo?.name}</h2>
-        <p className="text-3xl text-gray-400 mb-16">{currentChoreo?.style || 'Sem estilo'} </p>
+      {role === 'operator' ? (
+        <>
+          {/* Main Content (OPERATOR) */}
+          <div className="flex-1 flex flex-col items-center justify-center p-12 text-center">
+            
+            <p className="text-xl text-primary font-bold tracking-widest uppercase mb-4">No Palco Agora</p>
+            <h2 className="text-7xl font-serif font-bold mb-4">{currentChoreo?.name}</h2>
+            <p className="text-3xl text-gray-400 mb-16">{currentChoreo?.style || 'Sem estilo'} </p>
 
-        <div className="flex flex-col md:flex-row gap-12 md:gap-32 items-center justify-center mb-12 w-full max-w-6xl mx-auto">
-          {/* Cronômetro Progressivo */}
-          <div className="flex flex-col items-center flex-1">
-            <span className="text-gray-500 uppercase tracking-widest text-xl mb-4 font-bold">Decorrido</span>
-            <div className="text-[8rem] md:text-[10rem] font-bold leading-none tabular-nums text-white drop-shadow-2xl">
-              {formatTime(audioUrl ? audioDuration - timeLeft : parseDuration(currentChoreo?.duration) - timeLeft)}
+            <div className="flex flex-col md:flex-row gap-12 md:gap-32 items-center justify-center mb-12 w-full max-w-6xl mx-auto">
+              {/* Cronômetro Progressivo */}
+              <div className="flex flex-col items-center flex-1">
+                <span className="text-gray-500 uppercase tracking-widest text-xl mb-4 font-bold">Decorrido</span>
+                <div className="text-[8rem] md:text-[10rem] font-bold leading-none tabular-nums text-white drop-shadow-2xl">
+                  {formatTime(audioUrl ? audioDuration - timeLeft : parseDuration(currentChoreo?.duration) - timeLeft)}
+                </div>
+              </div>
+
+              <div className="hidden md:block w-px h-48 bg-gray-800"></div>
+
+              {/* Cronômetro Regressivo */}
+              <div className="flex flex-col items-center flex-1 relative">
+                {dirHandle && (
+                  <div className="absolute -top-12 flex items-center gap-2 px-4 py-1.5 rounded-full bg-gray-900 border border-gray-800 text-sm">
+                    <Music size={14} className={audioUrl ? "text-primary" : "text-gray-500"} />
+                    <span className={audioUrl ? "text-primary font-medium" : "text-gray-500"}>
+                      {audioUrl ? 'Áudio Vinculado' : 'Sem Áudio (1.mp3)'}
+                    </span>
+                  </div>
+                )}
+                <span className="text-gray-500 uppercase tracking-widest text-xl mb-4 font-bold">Restante</span>
+                <div className="text-[8rem] md:text-[10rem] font-bold leading-none tabular-nums text-primary drop-shadow-2xl">
+                  {formatTime(timeLeft)}
+                </div>
+              </div>
+            </div>
+
+            {/* Controls */}
+            <div className="flex items-center gap-8">
+              <button onClick={handlePrev} disabled={currentIndex === 0} className="p-6 rounded-full bg-gray-900 hover:bg-gray-800 disabled:opacity-50 transition-all">
+                <SkipBack size={32} />
+              </button>
+              
+              <button 
+                onClick={() => setIsPlaying(!isPlaying)}
+                className="p-8 rounded-full bg-primary hover:bg-primary/90 text-white shadow-xl shadow-primary/20 hover:scale-105 transition-all"
+              >
+                {isPlaying ? <Pause size={48} /> : <Play size={48} className="ml-2" />}
+              </button>
+
+              <button onClick={handleNext} disabled={currentIndex === order.length - 1} className="p-6 rounded-full bg-gray-900 hover:bg-gray-800 disabled:opacity-50 transition-all">
+                <SkipForward size={32} />
+              </button>
             </div>
           </div>
 
-          <div className="hidden md:block w-px h-48 bg-gray-800"></div>
-
-          {/* Cronômetro Regressivo */}
-          <div className="flex flex-col items-center flex-1 relative">
-            {dirHandle && (
-              <div className="absolute -top-12 flex items-center gap-2 px-4 py-1.5 rounded-full bg-gray-900 border border-gray-800 text-sm">
-                <Music size={14} className={audioUrl ? "text-primary" : "text-gray-500"} />
-                <span className={audioUrl ? "text-primary font-medium" : "text-gray-500"}>
-                  {audioUrl ? 'Áudio Vinculado' : 'Sem Áudio (1.mp3)'}
-                </span>
+          {/* Footer / Next Up */}
+          <div className="bg-gray-900/50 p-8 flex justify-between items-center">
+            {nextChoreo ? (
+              <div>
+                <p className="text-sm text-gray-500 font-bold tracking-wider uppercase mb-1">Próxima Coreografia</p>
+                <p className="text-2xl font-serif text-gray-200">{nextChoreo.name}</p>
+              </div>
+            ) : (
+              <div>
+                <p className="text-xl font-serif text-gray-500">Fim do Espetáculo</p>
               </div>
             )}
-            <span className="text-gray-500 uppercase tracking-widest text-xl mb-4 font-bold">Restante</span>
-            <div className="text-[8rem] md:text-[10rem] font-bold leading-none tabular-nums text-primary drop-shadow-2xl">
-              {formatTime(timeLeft)}
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Main Content (VIEWER / COXIA) */}
+          <div className="flex-1 flex overflow-hidden">
+            {/* Left Side: Current Choreo & Timer */}
+            <div className="flex-1 flex flex-col items-center justify-center p-12 text-center border-r border-gray-900">
+              <p className="text-2xl text-primary font-bold tracking-widest uppercase mb-4 flex items-center gap-4">
+                {isPlaying && <span className="w-4 h-4 bg-primary rounded-full animate-pulse"></span>}
+                No Palco Agora
+              </p>
+              <h2 className="text-8xl font-serif font-bold mb-6 text-white leading-tight">{currentChoreo?.name}</h2>
+              <p className="text-4xl text-gray-400 mb-20">{currentChoreo?.style || 'Sem estilo'} </p>
+
+              <div className="flex flex-col items-center w-full">
+                <span className="text-gray-500 uppercase tracking-widest text-2xl mb-6 font-bold">Tempo Restante</span>
+                <div className={`text-[15rem] font-bold leading-none tabular-nums drop-shadow-2xl transition-colors duration-1000 ${timeLeft <= 10 && timeLeft > 0 ? 'text-danger animate-pulse' : 'text-primary'}`}>
+                  {formatTime(timeLeft)}
+                </div>
+              </div>
+            </div>
+
+            {/* Right Side: Next Up List */}
+            <div className="w-[30%] bg-gray-900/30 p-12 flex flex-col">
+              <p className="text-xl text-gray-500 font-bold tracking-widest uppercase mb-12">Próximas Coreografias</p>
+              <div className="flex flex-col gap-8">
+                {order.slice(currentIndex + 1, currentIndex + 4).map((item, idx) => (
+                  <div key={item.order_index} className="flex flex-col border-l-4 border-gray-800 pl-6 py-2">
+                    <span className="text-gray-500 font-bold mb-1">#{item.order_index}</span>
+                    <h3 className="text-3xl font-serif text-white mb-2">{item.choreographies.name}</h3>
+                    <p className="text-xl text-gray-400">{item.choreographies.style}</p>
+                  </div>
+                ))}
+                
+                {currentIndex + 1 >= order.length && (
+                  <div className="text-center text-gray-600 mt-12">
+                    <p className="text-2xl font-serif">Fim do Espetáculo</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-
-        {/* Controls */}
-        <div className="flex items-center gap-8">
-          <button onClick={handlePrev} disabled={currentIndex === 0} className="p-6 rounded-full bg-gray-900 hover:bg-gray-800 disabled:opacity-50 transition-all">
-            <SkipBack size={32} />
-          </button>
-          
-          <button 
-            onClick={() => setIsPlaying(!isPlaying)}
-            className="p-8 rounded-full bg-primary hover:bg-primary/90 text-white shadow-xl shadow-primary/20 hover:scale-105 transition-all"
-          >
-            {isPlaying ? <Pause size={48} /> : <Play size={48} className="ml-2" />}
-          </button>
-
-          <button onClick={handleNext} disabled={currentIndex === order.length - 1} className="p-6 rounded-full bg-gray-900 hover:bg-gray-800 disabled:opacity-50 transition-all">
-            <SkipForward size={32} />
-          </button>
-        </div>
-      </div>
-
-      {/* Footer / Next Up */}
-      <div className="bg-gray-900/50 p-8 flex justify-between items-center">
-        {nextChoreo ? (
-          <div>
-            <p className="text-sm text-gray-500 font-bold tracking-wider uppercase mb-1">Próxima Coreografia</p>
-            <p className="text-2xl font-serif text-gray-200">{nextChoreo.name}</p>
-          </div>
-        ) : (
-          <div>
-            <p className="text-xl font-serif text-gray-500">Fim do Espetáculo</p>
-          </div>
-        )}
-      </div>
+        </>
+      )}
 
     </div>
   )

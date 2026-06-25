@@ -116,6 +116,9 @@ function PagamentosPage() {
       queryClient.invalidateQueries({ queryKey: ['dancers_finance'] })
       setIsAssignModalOpen(false)
       setAssignForm({ selectedCostumes: [], discount: 0, total_value: '', installments_count: 1, initial_due_date: new Date().toISOString().split('T')[0] })
+    },
+    onError: (error: any) => {
+      alert(`Erro ao vincular figurino: ${error.message || 'Verifique sua conexão ou banco de dados.'}`)
     }
   })
 
@@ -135,6 +138,9 @@ function PagamentosPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dancers_finance'] })
       setPayModal({ isOpen: false, installment: null })
+    },
+    onError: (error: any) => {
+      alert(`Erro ao salvar pagamento: ${error.message || 'Verifique sua conexão ou banco de dados.'}`)
     }
   })
 

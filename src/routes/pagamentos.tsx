@@ -240,7 +240,11 @@ function PagamentosPage() {
               const totalAssignments = dancer.costume_assignments?.length || 0
               const allInstallments = dancer.costume_assignments?.flatMap((a: any) => a.costume_installments) || []
               const pendingInstallments = allInstallments.filter((i: any) => i.status === 'Pendente')
+              const paidInstallments = allInstallments.filter((i: any) => i.status === 'Pago')
               const hasPending = pendingInstallments.length > 0
+              
+              const totalPago = paidInstallments.reduce((sum: number, i: any) => sum + (parseFloat(i.paid_amount) || parseFloat(i.amount)), 0)
+              const faltaPagar = pendingInstallments.reduce((sum: number, i: any) => sum + parseFloat(i.amount), 0)
 
               return (
                 <div key={dancer.id} className="border border-gray-200 rounded-2xl overflow-hidden">
@@ -262,6 +266,18 @@ function PagamentosPage() {
                     </div>
 
                     <div className="flex items-center gap-6">
+                      {totalAssignments > 0 && (
+                        <div className="flex items-center gap-4 mr-4">
+                          <div className="text-right">
+                            <span className="text-xs text-gray-500 block">Total Pago</span>
+                            <span className="font-bold text-success text-sm">{formatCurrency(totalPago)}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-xs text-gray-500 block">Falta Pagar</span>
+                            <span className="font-bold text-warning-dark text-sm">{formatCurrency(faltaPagar)}</span>
+                          </div>
+                        </div>
+                      )}
                       {totalAssignments > 0 && (
                         <div className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${hasPending ? 'bg-warning-light text-warning-dark' : 'bg-success/10 text-success'}`}>
                           {hasPending ? <Clock size={14}/> : <CheckCircle size={14}/>}

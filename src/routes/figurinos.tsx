@@ -38,16 +38,20 @@ function FigurinosPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('costume_assignments')
-        .select(`id, costume_name, delivered, dancers ( name )`)
+        .select(`id, costume_name, delivered, delivered_at, notes, dancers ( name )`)
       if (error) throw error
       return data
     },
     enabled: activeTab === 'entregas'
   })
 
-  const toggleDeliveryMutation = useMutation({
-    mutationFn: async ({ id, delivered }: { id: string, delivered: boolean }) => {
-      const { error } = await supabase.from('costume_assignments').update({ delivered }).eq('id', id)
+  const updateDeliveryMutation = useMutation({
+    mutationFn: async ({ id, delivered, notes }: { id: string, delivered?: boolean, notes?: string }) => {
+      const updateData: any = {}
+      if (delivered !== undefined) updateData.delivered = delivered
+      if (notes !== undefined) updateData.notes = notes
+      
+      const { error } = await supabase.from('costume_assignments').update(updateData).eq('id', id)
       if (error) throw error
     },
     onSuccess: () => {
@@ -136,6 +140,32 @@ function FigurinosPage() {
     } finally {
       setIsUploading(false)
     }
+  }
+
+  const exportCSV = () => {
+    if (!deliveries) return
+    const rows = [
+      ['Aluno', 'Figurinos', 'Status', 'Data Entrega', 'Observacao'],
+      ...deliveries.map((d: any) => [
+        `"${d.dancers?.name || ''}"`,
+        `"${d.costume_name || ''}"`,
+        d.delivered ? 'Entregue' : 'Pendente',
+        d.delivered && d.delivered_at ? new Date(d.delivered_at).toLocaleDateString('pt-BR') : '',
+        `"${d.notes || ''}"`
+      ])
+    ]
+    const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n")
+    const encodedUri = encodeURI(csvContent)
+    const link = document.createElement("a")
+    link.setAttribute("href", encodedUri)
+    link.setAttribute("download", "entregas_figurinos.csv")
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const handlePrint = () => {
+    window.print()
   }
 
   const filteredCostumes = costumes?.filter(c => 
@@ -248,41 +278,78 @@ function FigurinosPage() {
       )}
 
       {activeTab === 'entregas' && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 overflow-hidden">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-serif text-gray-800">Controle de Entregas</h2>
+            <div className="flex gap-3">
+              <button onClick={exportCSV} className="text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition-colors">Exportar CSV</button>
+              <button onClick={handlePrint} className="text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary px-4 py-2 rounded-lg transition-colors">Imprimir Lista</button>
+            </div>
+          </div>
+
           {isLoadingDeliveries ? (
             <div className="text-center py-12 text-gray-500">Carregando entregas...</div>
           ) : (
-            <table className="w-full text-left">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  <th className="px-6 py-4 font-serif text-gray-700">Aluno</th>
-                  <th className="px-6 py-4 font-serif text-gray-700">Figurinos Vinculados</th>
-                  <th className="px-6 py-4 font-serif text-gray-700 text-center w-32">Entregue?</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {deliveries?.length === 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left whitespace-nowrap min-w-[800px]">
+                <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    <td colSpan={3} className="px-6 py-8 text-center text-gray-500">Nenhum figurino vinculado ainda. Vá em Pagamentos para vincular figurinos.</td>
+                    <th className="px-6 py-4 font-serif text-gray-700">Aluno</th>
+                    <th className="px-6 py-4 font-serif text-gray-700">Figurinos Vinculados</th>
+                    <th className="px-6 py-4 font-serif text-gray-700">Observações (Opcional)</th>
+                    <th className="px-6 py-4 font-serif text-gray-700 text-center w-48">Status / Ação</th>
                   </tr>
-                )}
-                {deliveries?.map((d: any) => (
-                  <tr key={d.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-6 py-4 font-medium text-gray-800">{d.dancers?.name || 'Desconhecido'}</td>
-                    <td className="px-6 py-4 text-gray-600">{d.costume_name || 'N/A'}</td>
-                    <td className="px-6 py-4">
-                      <button
-                        onClick={() => toggleDeliveryMutation.mutate({ id: d.id, delivered: !d.delivered })}
-                        disabled={toggleDeliveryMutation.isPending}
-                        className={`w-full py-2 rounded-lg font-bold text-sm transition-colors border ${d.delivered ? 'bg-success/10 text-success border-success/20 hover:bg-success/20' : 'bg-gray-100 text-gray-400 border-gray-200 hover:bg-gray-200'}`}
-                      >
-                        {d.delivered ? 'Sim ✅' : 'Pendente'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {deliveries?.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-8 text-center text-gray-500">Nenhum figurino vinculado ainda. Vá em Pagamentos para vincular figurinos.</td>
+                    </tr>
+                  )}
+                  {deliveries?.map((d: any) => (
+                    <tr key={d.id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-6 py-4 font-medium text-gray-800">{d.dancers?.name || 'Desconhecido'}</td>
+                      <td className="px-6 py-4 text-gray-600 truncate max-w-[200px]" title={d.costume_name}>{d.costume_name || 'N/A'}</td>
+                      <td className="px-6 py-4">
+                        <input 
+                          type="text" 
+                          defaultValue={d.notes || ''} 
+                          placeholder="Ex: Faltou a saia"
+                          onBlur={(e) => {
+                            if(e.target.value !== d.notes) {
+                              updateDeliveryMutation.mutate({ id: d.id, notes: e.target.value })
+                            }
+                          }}
+                          className="w-full px-3 py-1.5 text-sm bg-transparent border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-primary/20 transition-all hover:bg-white focus:bg-white"
+                        />
+                      </td>
+                      <td className="px-6 py-4">
+                        {d.delivered ? (
+                          <div className="flex flex-col items-center">
+                            <button
+                              onClick={() => updateDeliveryMutation.mutate({ id: d.id, delivered: false })}
+                              disabled={updateDeliveryMutation.isPending}
+                              className="w-full py-1.5 rounded-lg font-bold text-xs transition-colors bg-success/10 text-success border border-success/20 hover:bg-success/20"
+                            >
+                              Entregue ✅
+                            </button>
+                            {d.delivered_at && <span className="text-[10px] text-gray-400 mt-1">{new Date(d.delivered_at).toLocaleDateString('pt-BR')}</span>}
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => updateDeliveryMutation.mutate({ id: d.id, delivered: true })}
+                            disabled={updateDeliveryMutation.isPending}
+                            className="w-full py-1.5 rounded-lg font-bold text-xs transition-colors bg-warning-light text-warning-dark border border-warning-dark/20 hover:bg-warning-light/80"
+                          >
+                            Marcar como Entregue
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}

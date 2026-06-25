@@ -314,11 +314,12 @@ function FigurinosPage() {
                       <td className="px-6 py-4">
                         <button 
                           onClick={() => setNotesModal({ isOpen: true, id: d.id, notes: d.notes || '' })}
-                          className={`flex items-center gap-1 text-sm font-medium transition-colors px-3 py-1.5 rounded-lg border ${d.notes ? 'bg-primary/5 text-primary border-primary/20 hover:bg-primary/10' : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'}`}
+                          className={`flex items-center gap-1 text-sm font-medium transition-colors px-3 py-1.5 rounded-lg border print:hidden ${d.notes ? 'bg-primary/5 text-primary border-primary/20 hover:bg-primary/10' : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'}`}
                         >
                           <span className="text-base">📝</span>
                           {d.notes ? 'Ver Obs' : 'Adicionar'}
                         </button>
+                        {d.notes && <span className="hidden print:inline text-sm text-gray-700">{d.notes}</span>}
                       </td>
                       <td className="px-6 py-4">
                         {d.delivered ? (

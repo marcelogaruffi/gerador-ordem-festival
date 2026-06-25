@@ -103,18 +103,26 @@ function PagamentosPage() {
       if (assignmentError) throw assignmentError
 
       // 2. Create Installments
-      const amountPerInstallment = totalValue / assignForm.installments_count
+      const totalValueNum = parseFloat(totalValue.toString())
+      const amountPerInstallment = Math.floor((totalValueNum / assignForm.installments_count) * 100) / 100
       const installments = []
       
+      let currentSum = 0;
       for (let i = 1; i <= assignForm.installments_count; i++) {
         // Use the initial due date
         const dueDate = new Date(assignForm.initial_due_date)
         dueDate.setUTCMonth(dueDate.getUTCMonth() + i - 1)
         
+        let instAmount = amountPerInstallment;
+        if (i === assignForm.installments_count) {
+          instAmount = parseFloat((totalValueNum - currentSum).toFixed(2))
+        }
+        currentSum += instAmount;
+
         installments.push({
           assignment_id: assignmentData.id,
           installment_number: i,
-          amount: amountPerInstallment,
+          amount: instAmount,
           due_date: dueDate.toISOString().split('T')[0],
           status: 'Pendente'
         })
@@ -139,12 +147,51 @@ function PagamentosPage() {
   // Mutation to pay an installment
   const payMutation = useMutation({
     mutationFn: async ({ id, paid_at, paid_amount, revert }: { id: string, paid_at?: string, paid_amount?: number, revert?: boolean }) => {
+      // Fetch current installment to know its assignment_id and original amount
+      const { data: inst } = await supabase.from('costume_installments').select('*').eq('id', id).single()
+      if (!inst) throw new Error("Parcela não encontrada")
+
       if (revert) {
+        // Se reverter, simplesmente volta pra pendente. (Não desfaz o abatimento dinâmico automaticamente para simplificar)
         const { error } = await supabase.from('costume_installments').update({ status: 'Pendente', paid_at: null, paid_amount: null }).eq('id', id)
         if (error) throw error
       } else {
+        const diff = paid_amount! - parseFloat(inst.amount)
+        
+        // Atualiza a parcela atual
         const { error } = await supabase.from('costume_installments').update({ status: 'Pago', paid_at, paid_amount }).eq('id', id)
         if (error) throw error
+
+        // Se pagou a mais ou a menos, abate/soma nas últimas parcelas pendentes
+        if (diff !== 0) {
+          const { data: pending } = await supabase.from('costume_installments')
+            .select('*')
+            .eq('assignment_id', inst.assignment_id)
+            .eq('status', 'Pendente')
+            .neq('id', id)
+            .order('installment_number', { ascending: false })
+          
+          let remainingDiff = diff
+          for (const p of (pending || [])) {
+            if (Math.abs(remainingDiff) < 0.01) break;
+            
+            let pAmount = parseFloat(p.amount)
+            if (remainingDiff > 0) { // Pagou a mais, reduz da pendente
+              if (pAmount >= remainingDiff) {
+                pAmount -= remainingDiff
+                remainingDiff = 0
+              } else {
+                remainingDiff -= pAmount
+                pAmount = 0
+              }
+            } else { // Pagou a menos, soma na pendente
+              pAmount += Math.abs(remainingDiff)
+              remainingDiff = 0
+            }
+            
+            await supabase.from('costume_installments').update({ amount: parseFloat(pAmount.toFixed(2)) }).eq('id', p.id)
+          }
+        }
       }
     },
     onSuccess: () => {
@@ -347,11 +394,19 @@ function PagamentosPage() {
                                         >
                                           <DollarSign size={16} /> Dar Baixa
                                         </button>
-                                        {settings?.pix_key && (
+                                        {settings?.pix_key ? (
                                           <button
                                             onClick={() => setPixModal({ isOpen: true, amount: parseFloat(inst.amount), payload: generatePixPayload(settings.pix_key, parseFloat(inst.amount), 'Coxia', 'Brasil', `FIG${inst.id.substring(0,8)}`), pixKey: settings.pix_key })}
                                             className="px-3 flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors rounded-lg"
                                             title="Gerar PIX"
+                                          >
+                                            <QrCode size={16} />
+                                          </button>
+                                        ) : (
+                                          <button
+                                            onClick={() => alert("Chave PIX não configurada! Vá no menu Configurações e defina sua chave recebedora.")}
+                                            className="px-3 flex items-center justify-center bg-gray-50 text-gray-300 transition-colors rounded-lg border border-gray-100"
+                                            title="PIX não configurado"
                                           >
                                             <QrCode size={16} />
                                           </button>

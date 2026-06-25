@@ -209,50 +209,43 @@ function PagamentosPage() {
       if (!inst) throw new Error("Parcela não encontrada")
 
       if (revert) {
-        // Se reverter, simplesmente volta pra pendente. (Não desfaz o abatimento dinâmico automaticamente para simplificar)
         const { error } = await supabase.from('costume_installments').update({ status: 'Pendente', paid_at: null, paid_amount: null }).eq('id', id)
         if (error) throw error
       } else {
-        const diff = paid_amount! - parseFloat(inst.amount)
-        
-        // Atualiza a parcela atual
         const { error } = await supabase.from('costume_installments').update({ status: 'Pago', paid_at, paid_amount }).eq('id', id)
         if (error) throw error
+      }
 
-        // Se pagou a mais ou a menos, abate/soma nas últimas parcelas pendentes
-        if (diff !== 0) {
-          const { data: pending } = await supabase.from('costume_installments')
-            .select('*')
-            .eq('assignment_id', inst.assignment_id)
-            .eq('status', 'Pendente')
-            .neq('id', id)
-            .order('installment_number', { ascending: false })
-          
-          let remainingDiff = diff
-          for (const p of (pending || [])) {
-            if (Math.abs(remainingDiff) < 0.01) break;
-            
-            let pAmount = parseFloat(p.amount)
-            if (remainingDiff > 0) { // Pagou a mais, reduz da pendente
-              if (pAmount >= remainingDiff) {
-                pAmount -= remainingDiff
-                remainingDiff = 0
-              } else {
-                remainingDiff -= pAmount
-                pAmount = 0
-              }
-            } else { // Pagou a menos, soma na pendente
-              pAmount += Math.abs(remainingDiff)
-              remainingDiff = 0
-            }
-            const updatePayload: any = { amount: parseFloat(pAmount.toFixed(2)) }
-            if (pAmount <= 0) {
-              updatePayload.status = 'Pago'
-              updatePayload.paid_at = new Date().toISOString().split('T')[0]
-              updatePayload.paid_amount = 0
-            }
-            await supabase.from('costume_installments').update(updatePayload).eq('id', p.id)
+      // Recalcular TODAS as parcelas pendentes para não quebrar a matemática
+      const { data: assignment } = await supabase.from('costume_assignments').select('*').eq('id', inst.assignment_id).single()
+      const { data: allInst } = await supabase.from('costume_installments').select('*').eq('assignment_id', inst.assignment_id).order('installment_number', { ascending: true })
+      
+      const paidInst = (allInst || []).filter(i => i.status === 'Pago')
+      const pendingInst = (allInst || []).filter(i => i.status === 'Pendente')
+      
+      const sumPaid = paidInst.reduce((acc, i) => acc + parseFloat(i.paid_amount || i.amount), 0)
+      const remainingValue = assignment.total_value - sumPaid
+      
+      if (pendingInst.length > 0) {
+        const pendingCount = pendingInst.length
+        const amountPerInstallment = Math.floor((remainingValue / pendingCount) * 100) / 100
+        let currentSum = 0;
+        
+        for (let i = 0; i < pendingCount; i++) {
+          const p = pendingInst[i]
+          let instAmount = amountPerInstallment;
+          if (i === pendingCount - 1) {
+            instAmount = parseFloat((remainingValue - currentSum).toFixed(2))
           }
+          currentSum += instAmount;
+
+          const updatePayload: any = { amount: instAmount > 0 ? instAmount : 0 }
+          if (instAmount <= 0) {
+            updatePayload.status = 'Pago'
+            updatePayload.paid_at = new Date().toISOString().split('T')[0]
+            updatePayload.paid_amount = 0
+          }
+          await supabase.from('costume_installments').update(updatePayload).eq('id', p.id)
         }
       }
     },
@@ -441,6 +434,7 @@ function PagamentosPage() {
               
               const totalPago = paidInstallments.reduce((sum: number, i: any) => sum + (parseFloat(i.paid_amount) || parseFloat(i.amount)), 0)
               const faltaPagar = pendingInstallments.reduce((sum: number, i: any) => sum + parseFloat(i.amount), 0)
+              const totalDosPacotes = dancer.costume_assignments?.reduce((sum: number, a: any) => sum + parseFloat(a.total_value), 0) || 0
 
               return (
                 <div key={dancer.id} className="border border-gray-200 rounded-2xl overflow-hidden">
@@ -468,10 +462,17 @@ function PagamentosPage() {
                             <span className="text-xs text-gray-500 block">Total Pago</span>
                             <span className="font-bold text-success text-sm">{formatCurrency(totalPago)}</span>
                           </div>
-                          <div className="text-right">
-                            <span className="text-xs text-gray-500 block">Falta Pagar</span>
-                            <span className="font-bold text-warning-dark text-sm">{formatCurrency(faltaPagar)}</span>
-                          </div>
+                          {totalPago > totalDosPacotes ? (
+                            <div className="text-right bg-danger/10 px-3 py-1 rounded-lg border border-danger/20">
+                              <span className="text-xs text-danger block font-bold">Devolver</span>
+                              <span className="font-bold text-danger text-sm">{formatCurrency(totalPago - totalDosPacotes)}</span>
+                            </div>
+                          ) : (
+                            <div className="text-right">
+                              <span className="text-xs text-gray-500 block">Falta Pagar</span>
+                              <span className="font-bold text-warning-dark text-sm">{formatCurrency(faltaPagar)}</span>
+                            </div>
+                          )}
                         </div>
                       )}
                       {totalAssignments > 0 && (

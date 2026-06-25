@@ -16,7 +16,7 @@ function PagamentosPage() {
   const [selectedDancerForAssign, setSelectedDancerForAssign] = useState<any>(null)
   
   const [assignForm, setAssignForm] = useState({
-    costume_id: '',
+    selectedCostumes: [] as any[],
     total_value: '',
     installments_count: 1,
     initial_due_date: new Date().toISOString().split('T')[0]
@@ -47,8 +47,8 @@ function PagamentosPage() {
         .select(`
           id, name,
           costume_assignments (
-            id, total_value, installments_count, created_at,
-            costumes ( name ),
+          costume_assignments (
+            id, costume_name, total_value, installments_count, created_at,
             costume_installments (
               id, installment_number, amount, due_date, status, paid_at, paid_amount
             )
@@ -79,7 +79,7 @@ function PagamentosPage() {
         .from('costume_assignments')
         .insert([{
           dancer_id: selectedDancerForAssign.id,
-          costume_id: assignForm.costume_id,
+          costume_name: assignForm.selectedCostumes.map(c => c.name).join(', '),
           total_value: totalValue,
           installments_count: assignForm.installments_count
         }])
@@ -115,7 +115,7 @@ function PagamentosPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dancers_finance'] })
       setIsAssignModalOpen(false)
-      setAssignForm({ costume_id: '', total_value: '', installments_count: 1, initial_due_date: new Date().toISOString().split('T')[0] })
+      setAssignForm({ selectedCostumes: [], total_value: '', installments_count: 1, initial_due_date: new Date().toISOString().split('T')[0] })
     }
   })
 
@@ -147,7 +147,28 @@ function PagamentosPage() {
   const openAssignModal = (dancer: any, e: React.MouseEvent) => {
     e.stopPropagation()
     setSelectedDancerForAssign(dancer)
+    setAssignForm({ selectedCostumes: [], total_value: '', installments_count: 1, initial_due_date: new Date().toISOString().split('T')[0] })
     setIsAssignModalOpen(true)
+  }
+
+  const handleCostumeToggle = (costume: any) => {
+    setAssignForm(prev => {
+      const isSelected = prev.selectedCostumes.find(c => c.id === costume.id)
+      let newSelected = []
+      if (isSelected) {
+        newSelected = prev.selectedCostumes.filter(c => c.id !== costume.id)
+      } else {
+        newSelected = [...prev.selectedCostumes, costume]
+      }
+      
+      // Auto sum prices
+      const sum = newSelected.reduce((acc, c) => acc + (parseFloat(c.price) || 0), 0)
+      return {
+        ...prev,
+        selectedCostumes: newSelected,
+        total_value: sum > 0 ? sum.toFixed(2) : ''
+      }
+    })
   }
 
   const handleAssignSubmit = (e: React.FormEvent) => {
@@ -237,7 +258,7 @@ function PagamentosPage() {
                             <div key={assignment.id} className="border border-gray-100 rounded-xl p-5 bg-gray-50/50">
                               <div className="flex justify-between items-center mb-4">
                                 <div>
-                                  <h4 className="font-bold text-lg text-gray-800">{assignment.costumes?.name || 'Figurino Desconhecido'}</h4>
+                                  <h4 className="font-bold text-lg text-gray-800">{assignment.costume_name || 'Figurino Desconhecido'}</h4>
                                   <p className="text-sm text-gray-500">Valor Total: {formatCurrency(assignment.total_value)}</p>
                                 </div>
                               </div>
@@ -297,18 +318,25 @@ function PagamentosPage() {
 
             <form onSubmit={handleAssignSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Selecione o Figurino</label>
-                <select 
-                  required
-                  value={assignForm.costume_id}
-                  onChange={e => setAssignForm({...assignForm, costume_id: e.target.value})}
-                  className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20"
-                >
-                  <option value="" disabled>Selecione um figurino cadastrado...</option>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Selecione 1 ou mais Figurinos</label>
+                <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded-xl p-3 bg-gray-50">
+                  {costumes?.length === 0 && <p className="text-sm text-gray-500">Nenhum figurino cadastrado.</p>}
                   {costumes?.map(c => (
-                    <option key={c.id} value={c.id}>{c.name} {c.price ? `(${formatCurrency(c.price)})` : ''}</option>
+                    <label key={c.id} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors">
+                      <input 
+                        type="checkbox"
+                        checked={assignForm.selectedCostumes.some(sc => sc.id === c.id)}
+                        onChange={() => handleCostumeToggle(c)}
+                        className="w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary"
+                      />
+                      <span className="text-sm text-gray-800 flex-1">{c.name}</span>
+                      <span className="text-sm font-bold text-gray-600">{c.price ? formatCurrency(c.price) : 'Sem valor'}</span>
+                    </label>
                   ))}
-                </select>
+                </div>
+                {assignForm.selectedCostumes.length === 0 && (
+                  <p className="text-xs text-danger mt-1">Selecione pelo menos um figurino.</p>
+                )}
               </div>
 
               <div className="flex gap-4">
@@ -362,7 +390,7 @@ function PagamentosPage() {
                 </button>
                 <button 
                   type="submit" 
-                  disabled={assignMutation.isPending}
+                  disabled={assignMutation.isPending || assignForm.selectedCostumes.length === 0}
                   className="flex-1 bg-primary text-white px-4 py-2 rounded-xl hover:bg-primary/90 font-medium disabled:opacity-50"
                 >
                   {assignMutation.isPending ? 'Salvando...' : 'Vincular'}

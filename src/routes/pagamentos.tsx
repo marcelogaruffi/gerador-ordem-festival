@@ -16,9 +16,26 @@ function PagamentosPage() {
   const [selectedDancerForAssign, setSelectedDancerForAssign] = useState<any>(null)
   
   const [assignForm, setAssignForm] = useState({
-    costume_name: '',
+    costume_id: '',
     total_value: '',
-    installments_count: 1
+    installments_count: 1,
+    initial_due_date: new Date().toISOString().split('T')[0]
+  })
+
+  const [payModal, setPayModal] = useState<{isOpen: boolean, installment: any}>({ isOpen: false, installment: null })
+  const [payForm, setPayForm] = useState({
+    paid_at: new Date().toISOString().split('T')[0],
+    paid_amount: ''
+  })
+
+  // Fetch costumes
+  const { data: costumes } = useQuery({
+    queryKey: ['costumes_list'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('costumes').select('*').order('name')
+      if (error) throw error
+      return data
+    }
   })
 
   // Fetch all dancers with their assignments and installments
@@ -30,9 +47,10 @@ function PagamentosPage() {
         .select(`
           id, name,
           costume_assignments (
-            id, costume_name, total_value, installments_count, created_at,
+            id, total_value, installments_count, created_at,
+            costumes ( name ),
             costume_installments (
-              id, installment_number, amount, due_date, status, paid_at
+              id, installment_number, amount, due_date, status, paid_at, paid_amount
             )
           )
         `)
@@ -61,7 +79,7 @@ function PagamentosPage() {
         .from('costume_assignments')
         .insert([{
           dancer_id: selectedDancerForAssign.id,
-          costume_name: assignForm.costume_name,
+          costume_id: assignForm.costume_id,
           total_value: totalValue,
           installments_count: assignForm.installments_count
         }])
@@ -73,12 +91,11 @@ function PagamentosPage() {
       // 2. Create Installments
       const amountPerInstallment = totalValue / assignForm.installments_count
       const installments = []
-      const today = new Date()
       
       for (let i = 1; i <= assignForm.installments_count; i++) {
-        // Default due date: 1 month apart starting today
-        const dueDate = new Date(today)
-        dueDate.setMonth(today.getMonth() + i - 1)
+        // Use the initial due date
+        const dueDate = new Date(assignForm.initial_due_date)
+        dueDate.setUTCMonth(dueDate.getUTCMonth() + i - 1)
         
         installments.push({
           assignment_id: assignmentData.id,
@@ -98,21 +115,26 @@ function PagamentosPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dancers_finance'] })
       setIsAssignModalOpen(false)
-      setAssignForm({ costume_name: '', total_value: '', installments_count: 1 })
+      setAssignForm({ costume_id: '', total_value: '', installments_count: 1, initial_due_date: new Date().toISOString().split('T')[0] })
     }
   })
 
   // Mutation to pay an installment
   const payMutation = useMutation({
-    mutationFn: async (installmentId: string) => {
+    mutationFn: async () => {
       const { error } = await supabase
         .from('costume_installments')
-        .update({ status: 'Pago', paid_at: new Date().toISOString() })
-        .eq('id', installmentId)
+        .update({ 
+          status: 'Pago', 
+          paid_at: new Date(payForm.paid_at).toISOString(),
+          paid_amount: parseFloat(payForm.paid_amount)
+        })
+        .eq('id', payModal.installment.id)
       if (error) throw error
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dancers_finance'] })
+      setPayModal({ isOpen: false, installment: null })
     }
   })
 
@@ -215,7 +237,7 @@ function PagamentosPage() {
                             <div key={assignment.id} className="border border-gray-100 rounded-xl p-5 bg-gray-50/50">
                               <div className="flex justify-between items-center mb-4">
                                 <div>
-                                  <h4 className="font-bold text-lg text-gray-800">{assignment.costume_name}</h4>
+                                  <h4 className="font-bold text-lg text-gray-800">{assignment.costumes?.name || 'Figurino Desconhecido'}</h4>
                                   <p className="text-sm text-gray-500">Valor Total: {formatCurrency(assignment.total_value)}</p>
                                 </div>
                               </div>
@@ -236,15 +258,18 @@ function PagamentosPage() {
                                     
                                     {inst.status === 'Pendente' ? (
                                       <button 
-                                        onClick={() => payMutation.mutate(inst.id)}
-                                        disabled={payMutation.isPending}
+                                        onClick={() => {
+                                          setPayModal({ isOpen: true, installment: inst })
+                                          setPayForm({ paid_at: new Date().toISOString().split('T')[0], paid_amount: inst.amount.toString() })
+                                        }}
                                         className="w-full flex items-center justify-center gap-2 bg-primary/10 text-primary hover:bg-primary hover:text-white transition-colors py-2 rounded-lg text-sm font-medium"
                                       >
                                         <DollarSign size={16} /> Dar Baixa
                                       </button>
                                     ) : (
-                                      <div className="w-full flex items-center justify-center gap-2 text-success py-2 text-sm font-medium">
-                                        <Check size={16} /> Pago em {new Date(inst.paid_at).toLocaleDateString('pt-BR')}
+                                      <div className="w-full flex flex-col items-center justify-center gap-1 text-success py-2 text-sm font-medium">
+                                        <div className="flex items-center gap-1"><Check size={16} /> Pago em {new Date(inst.paid_at).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</div>
+                                        <span className="text-xs text-gray-500 font-normal">Valor pago: {formatCurrency(inst.paid_amount || inst.amount)}</span>
                                       </div>
                                     )}
                                   </div>
@@ -272,28 +297,43 @@ function PagamentosPage() {
 
             <form onSubmit={handleAssignSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Figurino</label>
-                <input 
-                  type="text" 
+                <label className="block text-sm font-medium text-gray-700 mb-1">Selecione o Figurino</label>
+                <select 
                   required
-                  value={assignForm.costume_name}
-                  onChange={e => setAssignForm({...assignForm, costume_name: e.target.value})}
+                  value={assignForm.costume_id}
+                  onChange={e => setAssignForm({...assignForm, costume_id: e.target.value})}
                   className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20"
-                  placeholder="Ex: Saia de Ballet Branca"
-                />
+                >
+                  <option value="" disabled>Selecione um figurino cadastrado...</option>
+                  {costumes?.map(c => (
+                    <option key={c.id} value={c.id}>{c.name} {c.price ? `(${formatCurrency(c.price)})` : ''}</option>
+                  ))}
+                </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Valor Total (R$)</label>
-                <input 
-                  type="number" 
-                  step="0.01"
-                  required
-                  value={assignForm.total_value}
-                  onChange={e => setAssignForm({...assignForm, total_value: e.target.value})}
-                  className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20"
-                  placeholder="Ex: 150.00"
-                />
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Data 1ª Parcela</label>
+                  <input 
+                    type="date" 
+                    required
+                    value={assignForm.initial_due_date}
+                    onChange={e => setAssignForm({...assignForm, initial_due_date: e.target.value})}
+                    className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Valor Total (R$)</label>
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    required
+                    value={assignForm.total_value}
+                    onChange={e => setAssignForm({...assignForm, total_value: e.target.value})}
+                    className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20"
+                    placeholder="Ex: 150.00"
+                  />
+                </div>
               </div>
 
               <div>
@@ -326,6 +366,57 @@ function PagamentosPage() {
                   className="flex-1 bg-primary text-white px-4 py-2 rounded-xl hover:bg-primary/90 font-medium disabled:opacity-50"
                 >
                   {assignMutation.isPending ? 'Salvando...' : 'Vincular'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Dar Baixa */}
+      {payModal.isOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
+            <h2 className="text-xl font-serif text-coxia-dark mb-4">Confirmar Pagamento</h2>
+            
+            <form onSubmit={(e) => { e.preventDefault(); payMutation.mutate() }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Data do Pagamento</label>
+                <input 
+                  type="date" 
+                  required
+                  value={payForm.paid_at}
+                  onChange={e => setPayForm({...payForm, paid_at: e.target.value})}
+                  className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Valor Recebido (R$)</label>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  required
+                  value={payForm.paid_amount}
+                  onChange={e => setPayForm({...payForm, paid_amount: e.target.value})}
+                  className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+
+              <div className="pt-4 flex gap-3">
+                <button 
+                  type="button" 
+                  onClick={() => setPayModal({isOpen: false, installment: null})}
+                  className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 font-medium"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={payMutation.isPending}
+                  className="flex-1 bg-success text-white px-4 py-2 rounded-xl hover:bg-success/90 font-medium disabled:opacity-50"
+                >
+                  {payMutation.isPending ? 'Salvando...' : 'Dar Baixa'}
                 </button>
               </div>
             </form>

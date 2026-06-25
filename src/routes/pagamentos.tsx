@@ -1,10 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router'
 import React, { useState } from 'react'
-import { Plus, CheckCircle, Clock, Search, ChevronDown, ChevronUp, Check, DollarSign, QrCode, RotateCcw, X, Trash2 } from 'lucide-react'
+import { Plus, CheckCircle, Clock, Search, ChevronDown, ChevronUp, Check, DollarSign, QrCode, RotateCcw, X, Trash2, Edit2, Paperclip, ExternalLink, FileText, UploadCloud, Download } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { QRCodeSVG } from 'qrcode.react'
 import { generatePixPayload } from '../lib/pix'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 export const Route = createFileRoute('/pagamentos')({
   component: PagamentosPage,
@@ -13,6 +15,7 @@ export const Route = createFileRoute('/pagamentos')({
 function PagamentosPage() {
   const queryClient = useQueryClient()
   const [searchTerm, setSearchTerm] = useState('')
+  const [activeTab, setActiveTab] = useState<'alunos' | 'logs'>('alunos')
   const [expandedDancer, setExpandedDancer] = useState<string | null>(null)
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false)
   const [selectedDancerForAssign, setSelectedDancerForAssign] = useState<any>(null)
@@ -38,10 +41,87 @@ function PagamentosPage() {
   })
 
   const [payModal, setPayModal] = useState<{isOpen: boolean, installment: any}>({ isOpen: false, installment: null })
-  const [payForm, setPayForm] = useState({
+  const [payForm, setPayForm] = useState<{paid_at: string, paid_amount: string, receiptFile: File | null}>({
     paid_at: new Date().toISOString().split('T')[0],
-    paid_amount: ''
+    paid_amount: '',
+    receiptFile: null
   })
+
+  const logFinancialAction = async (action: string, dancerName: string, details: string, amount: number | null, receiptUrl: string | null = null) => {
+    const { error } = await supabase.from('financial_logs').insert([{
+      action,
+      dancer_name: dancerName,
+      details,
+      amount,
+      receipt_url: receiptUrl
+    }])
+    if (error) {
+      console.error("Log error:", error)
+      alert("Erro ao gravar log financeiro: " + error.message)
+    }
+  }
+
+  const exportLogsToCSV = () => {
+    if (!logs || logs.length === 0) {
+      alert('Não há dados para exportar.')
+      return
+    }
+
+    const headers = ['Data/Hora', 'Acao', 'Aluno', 'Detalhes', 'Valor', 'Tem Comprovante']
+    const csvRows = []
+    csvRows.push(headers.join(','))
+
+    for (const log of logs) {
+      const dataHora = new Date(log.created_at).toLocaleString('pt-BR').replace(/,/g, '')
+      const acao = `"${log.action}"`
+      const aluno = `"${log.dancer_name}"`
+      const detalhes = `"${log.details || ''}"`
+      const valor = log.amount ? `"${log.amount.toString().replace('.', ',')}"` : '""'
+      const temComprovante = log.receipt_url ? '"Sim"' : '"Nao"'
+
+      csvRows.push([dataHora, acao, aluno, detalhes, valor, temComprovante].join(','))
+    }
+
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + csvRows.join('\n')
+    const encodedUri = encodeURI(csvContent)
+    const link = document.createElement('a')
+    link.setAttribute('href', encodedUri)
+    link.setAttribute('download', `relatorio_logs_financeiros_${new Date().toISOString().split('T')[0]}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const exportLogsToPDF = () => {
+    if (!logs || logs.length === 0) {
+      alert('Não há dados para exportar.')
+      return
+    }
+
+    const doc = new jsPDF()
+    const tableColumn = ["Data/Hora", "Acao", "Aluno", "Detalhes", "Valor", "Comprovante"]
+    const tableRows: any[] = []
+
+    logs.forEach((log: any) => {
+      const dataHora = new Date(log.created_at).toLocaleString('pt-BR')
+      const acao = log.action
+      const aluno = log.dancer_name
+      const detalhes = log.details || ''
+      const valor = log.amount ? log.amount.toString().replace('.', ',') : '-'
+      const temComprovante = log.receipt_url ? 'Sim' : 'Nao'
+      tableRows.push([dataHora, acao, aluno, detalhes, valor, temComprovante])
+    })
+
+    doc.text("Relatorio de LOG Financeiro", 14, 15)
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: 20,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [59, 130, 246] }
+    })
+    doc.save(`relatorio_logs_financeiros_${new Date().toISOString().split('T')[0]}.pdf`)
+  }
   
   const [pixModal, setPixModal] = useState<{isOpen: boolean, payload: string, amount: number, pixKey: string, pixKeyType: string}>({ isOpen: false, payload: '', amount: 0, pixKey: '', pixKeyType: 'CPF/CNPJ' })
 
@@ -82,7 +162,7 @@ function PagamentosPage() {
           costume_assignments (
             id, costume_name, total_value, installments_count, created_at,
             costume_installments (
-              id, installment_number, amount, due_date, status, paid_at, paid_amount
+              id, installment_number, amount, due_date, status, paid_at, paid_amount, receipt_url
             )
           )
         `)
@@ -96,6 +176,16 @@ function PagamentosPage() {
         })
       })
       
+      return data
+    }
+  })
+
+  // Fetch logs
+  const { data: logs, isLoading: isLoadingLogs, isError: isErrorLogs, error: logsError } = useQuery({
+    queryKey: ['financial_logs'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('financial_logs').select('*').order('created_at', { ascending: false })
+      if (error) throw error
       return data
     }
   })
@@ -115,6 +205,7 @@ function PagamentosPage() {
       }
 
       let assignmentId = assignForm.assignmentId;
+      const isEdit = !!assignmentId;
 
       if (assignmentId) {
         // Edit existing assignment
@@ -190,9 +281,19 @@ function PagamentosPage() {
 
         if (installmentsError) throw installmentsError
       }
+
+      const discountText = assignForm.discount > 0 ? ` (Desconto de ${assignForm.discount}% aplicado)` : ''
+
+      await logFinancialAction(
+        isEdit ? 'VÍNCULO EDITADO' : 'VÍNCULO CRIADO',
+        selectedDancerForAssign.name,
+        `Pacote: ${desc} em ${assignForm.installments_count}x${discountText}`,
+        totalValue
+      )
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dancers_finance'] })
+      queryClient.invalidateQueries({ queryKey: ['financial_logs'] })
       setIsAssignModalOpen(false)
       setAssignForm({ assignmentId: null, selectedCostumes: [], discount: 0, includeSpectacleFee: false, spectacleFeeExempt: false, total_value: '', installments_count: 1, initial_due_date: new Date().toISOString().split('T')[0] })
     },
@@ -203,16 +304,26 @@ function PagamentosPage() {
 
   // Mutation to pay an installment
   const payMutation = useMutation({
-    mutationFn: async ({ id, paid_at, paid_amount, revert }: { id: string, paid_at?: string, paid_amount?: number, revert?: boolean }) => {
+    mutationFn: async ({ id, paid_at, paid_amount, revert, receiptFile }: { id: string, paid_at?: string, paid_amount?: number, revert?: boolean, receiptFile?: File | null }) => {
       // Fetch current installment to know its assignment_id and original amount
       const { data: inst } = await supabase.from('costume_installments').select('*').eq('id', id).single()
       if (!inst) throw new Error("Parcela não encontrada")
 
+      let finalReceiptUrl = null;
+
       if (revert) {
-        const { error } = await supabase.from('costume_installments').update({ status: 'Pendente', paid_at: null, paid_amount: null }).eq('id', id)
+        const { error } = await supabase.from('costume_installments').update({ status: 'Pendente', paid_at: null, paid_amount: null, receipt_url: null }).eq('id', id)
         if (error) throw error
       } else {
-        const { error } = await supabase.from('costume_installments').update({ status: 'Pago', paid_at, paid_amount }).eq('id', id)
+        if (receiptFile) {
+          const fileExt = receiptFile.name.split('.').pop()
+          const fileName = `${id}-${Date.now()}.${fileExt}`
+          const { error: uploadError } = await supabase.storage.from('receipts').upload(fileName, receiptFile)
+          if (uploadError) throw uploadError
+          const { data: publicUrlData } = supabase.storage.from('receipts').getPublicUrl(fileName)
+          finalReceiptUrl = publicUrlData.publicUrl
+        }
+        const { error } = await supabase.from('costume_installments').update({ status: 'Pago', paid_at, paid_amount, receipt_url: finalReceiptUrl }).eq('id', id)
         if (error) throw error
       }
 
@@ -248,9 +359,18 @@ function PagamentosPage() {
           await supabase.from('costume_installments').update(updatePayload).eq('id', p.id)
         }
       }
+
+      // Log the action
+      const { data: dancerData } = await supabase.from('dancers').select('name').eq('id', assignment.dancer_id).single()
+      if (revert) {
+        await logFinancialAction('PAGAMENTO REVERTIDO', dancerData?.name || 'Desconhecido', `Reversão da Parcela ${inst.installment_number}`, inst.paid_amount || inst.amount)
+      } else {
+        await logFinancialAction('PAGAMENTO REALIZADO', dancerData?.name || 'Desconhecido', `Baixa da Parcela ${inst.installment_number}`, paid_amount!, finalReceiptUrl)
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dancers_finance'] })
+      queryClient.invalidateQueries({ queryKey: ['financial_logs'] })
       setPayModal({ isOpen: false, installment: null })
     },
     onError: (error: any) => {
@@ -260,14 +380,21 @@ function PagamentosPage() {
 
   const deleteAssignmentMutation = useMutation({
     mutationFn: async (id: string) => {
+      const { data: assignment } = await supabase.from('costume_assignments').select('*, dancers(name)').eq('id', id).single()
+      
       const { error: instError } = await supabase.from('costume_installments').delete().eq('assignment_id', id)
       if (instError) throw instError
 
       const { error } = await supabase.from('costume_assignments').delete().eq('id', id)
       if (error) throw error
+      
+      if (assignment) {
+        await logFinancialAction('VÍNCULO EXCLUÍDO', assignment.dancers?.name || 'Desconhecido', `Pacote: ${assignment.costume_name}`, assignment.total_value)
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dancers_finance'] })
+      queryClient.invalidateQueries({ queryKey: ['financial_logs'] })
     },
     onError: (error: any) => {
       alert(`Erro ao excluir pacote: ${error.message || error}`)
@@ -399,17 +526,36 @@ function PagamentosPage() {
         </div>
       </div>
 
+      <div className="flex gap-4 border-b border-gray-200">
+        <button
+          onClick={() => setActiveTab('alunos')}
+          className={`pb-3 px-4 font-medium text-sm transition-colors relative ${activeTab === 'alunos' ? 'text-primary' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          Alunos
+          {activeTab === 'alunos' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full" />}
+        </button>
+        <button
+          onClick={() => setActiveTab('logs')}
+          className={`pb-3 px-4 font-medium text-sm transition-colors relative ${activeTab === 'logs' ? 'text-primary' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          Relatório de LOG
+          {activeTab === 'logs' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full" />}
+        </button>
+      </div>
+
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 mb-6">
-          <Search size={20} className="text-gray-400 mr-2" />
-          <input
-            type="text"
-            placeholder="Buscar aluno..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="bg-transparent border-none outline-none w-full text-gray-700"
-          />
-        </div>
+        {activeTab === 'alunos' ? (
+          <>
+            <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 mb-6">
+              <Search size={20} className="text-gray-400 mr-2" />
+              <input
+                type="text"
+                placeholder="Buscar aluno..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="bg-transparent border-none outline-none w-full text-gray-700"
+              />
+            </div>
 
         {isLoading ? (
           <div className="text-center py-8 text-gray-500">Carregando dados financeiros...</div>
@@ -485,7 +631,7 @@ function PagamentosPage() {
                         onClick={(e) => openAssignModal(dancer, e)}
                         className="text-primary hover:text-primary/80 font-medium text-sm flex items-center gap-1"
                       >
-                        <Plus size={16} /> Vincular
+                        {totalAssignments > 0 ? <><Edit2 size={16} /> Editar Pacote</> : <><Plus size={16} /> Vincular</>}
                       </button>
                       {expandedDancer === dancer.id ? <ChevronUp size={20} className="text-gray-400" /> : <ChevronDown size={20} className="text-gray-400" />}
                     </div>
@@ -538,7 +684,7 @@ function PagamentosPage() {
                                         <button 
                                           onClick={() => {
                                             setPayModal({ isOpen: true, installment: inst })
-                                            setPayForm({ paid_at: new Date().toISOString().split('T')[0], paid_amount: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseFloat(inst.amount)) })
+                                            setPayForm({ paid_at: new Date().toISOString().split('T')[0], paid_amount: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseFloat(inst.amount)), receiptFile: null })
                                           }}
                                           className="w-full flex items-center justify-center gap-2 bg-primary/10 text-primary hover:bg-primary hover:text-white transition-colors py-2 rounded-lg text-sm font-medium"
                                         >
@@ -563,18 +709,25 @@ function PagamentosPage() {
                                         )}
                                       </div>
                                     ) : (
-                                      <div 
-                                        className="w-full flex flex-col items-center justify-center gap-1 text-success py-2 text-sm font-medium cursor-pointer hover:bg-success/10 rounded-lg transition-colors border border-transparent hover:border-success/20"
-                                        onClick={() => {
-                                          setPayModal({ isOpen: true, installment: inst })
-                                          setPayForm({ paid_at: inst.paid_at ? new Date(inst.paid_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0], paid_amount: inst.paid_amount ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseFloat(inst.paid_amount)) : '' })
-                                        }}
-                                        title="Clique para editar ou reverter"
-                                      >
-                                        <div className="flex items-center gap-1"><Check size={16} /> Pago em {new Date(inst.paid_at).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</div>
-                                        <span className="text-xs text-success/70 font-normal">Editar Pagamento</span>
-                                      </div>
-                                    )}
+                                        <div className="w-full flex flex-col gap-2">
+                                          <div 
+                                            className="w-full flex flex-col items-center justify-center gap-1 text-success py-2 text-sm font-medium cursor-pointer hover:bg-success/10 rounded-lg transition-colors border border-transparent hover:border-success/20"
+                                            onClick={() => {
+                                              setPayModal({ isOpen: true, installment: inst })
+                                              setPayForm({ paid_at: inst.paid_at ? new Date(inst.paid_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0], paid_amount: inst.paid_amount ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseFloat(inst.paid_amount)) : '', receiptFile: null })
+                                            }}
+                                            title="Clique para editar ou reverter"
+                                          >
+                                            <div className="flex items-center gap-1"><Check size={16} /> Pago em {new Date(inst.paid_at).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</div>
+                                            <span className="text-xs text-success/70 font-normal">Editar Pagamento</span>
+                                          </div>
+                                          {inst.receipt_url && (
+                                            <a href={inst.receipt_url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-1 text-primary hover:bg-primary/10 py-1.5 rounded-lg text-xs font-medium transition-colors" title="Ver Comprovante Anexado">
+                                              <Paperclip size={14} /> Ver Comprovante
+                                            </a>
+                                          )}
+                                        </div>
+                                      )}
                                   </div>
                                 ))}
                               </div>
@@ -587,6 +740,93 @@ function PagamentosPage() {
                 </div>
               )
             })}
+          </div>
+        )}
+        </>
+        ) : (
+          <div className="space-y-4">
+            {isLoadingLogs ? (
+              <div className="text-center py-8 text-gray-500">Carregando logs...</div>
+            ) : isErrorLogs ? (
+              <div className="text-center py-12 px-4 rounded-xl border border-danger/20 bg-danger/5">
+                <h3 className="text-danger font-bold text-lg mb-2">Erro ao ler os Logs!</h3>
+                <p className="text-danger-dark mb-4 max-w-lg mx-auto">
+                  {(logsError as any)?.message || 'Erro desconhecido.'}
+                </p>
+                <p className="text-sm font-medium text-danger/80">
+                  Provavelmente o script SQL v11 não rodou até o final no Supabase.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex justify-end gap-2">
+                  <button 
+                    onClick={exportLogsToCSV}
+                    className="flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-xl hover:bg-primary/20 transition-colors font-medium text-sm"
+                  >
+                    <Download size={16} /> Exportar CSV
+                  </button>
+                  <button 
+                    onClick={exportLogsToPDF}
+                    className="flex items-center gap-2 bg-danger/10 text-danger px-4 py-2 rounded-xl hover:bg-danger/20 transition-colors font-medium text-sm"
+                  >
+                    <FileText size={16} /> Exportar PDF
+                  </button>
+                </div>
+                <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm text-gray-600">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold text-gray-700 rounded-tl-xl">Data/Hora</th>
+                      <th className="px-4 py-3 font-semibold text-gray-700">Ação</th>
+                      <th className="px-4 py-3 font-semibold text-gray-700">Aluno</th>
+                      <th className="px-4 py-3 font-semibold text-gray-700">Detalhes</th>
+                      <th className="px-4 py-3 font-semibold text-gray-700">Valor</th>
+                      <th className="px-4 py-3 font-semibold text-gray-700 text-center rounded-tr-xl">Comprovante</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {logs?.map((log: any) => (
+                      <tr key={log.id} className="hover:bg-gray-50/50">
+                        <td className="px-4 py-3 whitespace-nowrap">{new Date(log.created_at).toLocaleString('pt-BR')}</td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-1 rounded-md text-xs font-bold ${log.action.includes('REVERTIDO') || log.action.includes('EXCLUÍDO') ? 'bg-danger/10 text-danger' : log.action.includes('EDITADO') ? 'bg-warning-light text-warning-dark' : 'bg-success/10 text-success'}`}>
+                            {log.action}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-medium text-gray-800">{log.dancer_name}</td>
+                        <td className="px-4 py-3 text-gray-600">
+                          {log.details && log.details.includes('(Desconto de') ? (
+                            <div className="flex flex-col gap-1 items-start">
+                              <span className="text-sm">{log.details.split('(Desconto de')[0]}</span>
+                              <span className="inline-flex items-center gap-1 bg-yellow-100 text-yellow-800 font-bold text-xs px-2 py-1 rounded-md border border-yellow-200">
+                                🎁 Desconto de{log.details.split('(Desconto de')[1].replace(')', '')}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-sm">{log.details}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 font-medium">{log.amount ? formatCurrency(log.amount) : '-'}</td>
+                        <td className="px-4 py-3 text-center">
+                          {log.receipt_url && (
+                            <a href={log.receipt_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:text-primary/80 bg-primary/10 px-2 py-1 rounded text-xs font-medium transition-colors">
+                              <ExternalLink size={14} /> Ver
+                            </a>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {(!logs || logs.length === 0) && (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-8 text-center text-gray-500">Nenhum registro encontrado.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -741,7 +981,7 @@ function PagamentosPage() {
             
             <form onSubmit={(e) => { 
               e.preventDefault(); 
-              payMutation.mutate({ id: payModal.installment.id, paid_at: new Date(payForm.paid_at).toISOString(), paid_amount: parseMoneyValue(payForm.paid_amount) }) 
+              payMutation.mutate({ id: payModal.installment.id, paid_at: new Date(payForm.paid_at).toISOString(), paid_amount: parseMoneyValue(payForm.paid_amount), receiptFile: payForm.receiptFile }) 
             }} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Data do Pagamento</label>
@@ -763,6 +1003,23 @@ function PagamentosPage() {
                   onChange={e => handleMoneyInput(e, val => setPayForm({...payForm, paid_amount: val}))}
                   className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Comprovante (Opcional)</label>
+                <div className="relative">
+                  <input 
+                    type="file" 
+                    id="receipt"
+                    accept="image/*,.pdf"
+                    onChange={e => setPayForm({...payForm, receiptFile: e.target.files?.[0] || null})}
+                    className="hidden"
+                  />
+                  <label htmlFor="receipt" className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 border-dashed rounded-xl cursor-pointer transition-colors text-sm text-gray-600">
+                    <UploadCloud size={16} />
+                    <span className="truncate">{payForm.receiptFile ? payForm.receiptFile.name : 'Anexar Arquivo (Imagem ou PDF)'}</span>
+                  </label>
+                </div>
               </div>
 
               {payModal.installment?.status === 'Pago' && (

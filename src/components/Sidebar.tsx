@@ -40,16 +40,21 @@ export function Sidebar() {
 
         {/* Gestão Financeira Submenu */}
         <div className="pt-1">
-          <button 
-            onClick={() => setIsFinanceOpen(!isFinanceOpen)}
-            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all hover:bg-primary/20 hover:text-primary ${isFinanceOpen ? 'text-primary' : 'text-gray-300'}`}
-          >
+          {(() => {
+            const isFinanceActive = location.pathname.includes('/pagamentos') || location.pathname.includes('/caixa');
+            return (
+              <button 
+                onClick={() => setIsFinanceOpen(!isFinanceOpen)}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${isFinanceActive ? 'bg-primary/80 text-white hover:bg-primary/90' : 'hover:bg-primary/20 hover:text-primary text-gray-300'}`}
+              >
             <div className="flex items-center gap-3">
               <PieChart size={20} />
               <span className="font-medium">Gestão Financeira</span>
             </div>
-            {isFinanceOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-          </button>
+              {isFinanceOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              </button>
+            )
+          })()}
           
           {isFinanceOpen && (
             <div className="mt-1 flex flex-col gap-1">

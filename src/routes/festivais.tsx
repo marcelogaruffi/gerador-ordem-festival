@@ -14,7 +14,7 @@ function FestivalsPage() {
   const queryClient = useQueryClient()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [formData, setFormData] = useState({ name: '', city: '', state: '', start_date: '', end_date: '', status: 'Planejamento', image_url: '' })
+  const [formData, setFormData] = useState({ name: '', city: '', state: '', location: '', start_date: '', end_date: '', status: 'Planejamento', image_url: '' })
   const [noDate, setNoDate] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
 
@@ -98,6 +98,7 @@ function FestivalsPage() {
       name: fest.name,
       city: fest.city || '',
       state: fest.state || '',
+      location: fest.location || '',
       start_date: fest.start_date || '',
       end_date: fest.end_date || '',
       status: fest.status || 'Planejamento',
@@ -109,7 +110,7 @@ function FestivalsPage() {
 
   const openNewModal = () => {
     setNoDate(false)
-    setFormData({ name: '', city: '', state: '', start_date: '', end_date: '', status: 'Planejamento' })
+    setFormData({ name: '', city: '', state: '', location: '', start_date: '', end_date: '', status: 'Planejamento', image_url: '' })
     setEditingId(null)
     setIsModalOpen(true)
   }
@@ -118,7 +119,7 @@ function FestivalsPage() {
     setIsModalOpen(false)
     setEditingId(null)
     setNoDate(false)
-    setFormData({ name: '', city: '', state: '', start_date: '', end_date: '', status: 'Planejamento', image_url: '' })
+    setFormData({ name: '', city: '', state: '', location: '', start_date: '', end_date: '', status: 'Planejamento', image_url: '' })
   }
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -190,7 +191,7 @@ function FestivalsPage() {
                   <div className="space-y-2 text-sm text-gray-500">
                     <div className="flex items-center gap-2">
                       <MapPin size={16} className="text-primary/70" />
-                      {festival.city} - {festival.state}
+                      {festival.location ? `${festival.location} - ` : ''}{festival.city} {festival.state ? `- ${festival.state}` : ''}
                     </div>
                     <div className="flex items-center gap-2">
                       <CalendarIcon size={16} className="text-primary/70" />
@@ -256,6 +257,17 @@ function FestivalsPage() {
                   onChange={e => setFormData({...formData, name: e.target.value})}
                   className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                   placeholder="Ex: Festival de Dança de Inverno"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Local (Teatro / Espaço)</label>
+                <input 
+                  type="text" 
+                  value={formData.location}
+                  onChange={e => setFormData({...formData, location: e.target.value})}
+                  className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                  placeholder="Ex: Teatro Municipal Guaíra"
                 />
               </div>
 

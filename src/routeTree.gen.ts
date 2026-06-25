@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as VinculosRouteImport } from './routes/vinculos'
 import { Route as TimelineRouteImport } from './routes/timeline'
 import { Route as ProfessoresRouteImport } from './routes/professores'
+import { Route as PagamentosRouteImport } from './routes/pagamentos'
 import { Route as OrdemRouteImport } from './routes/ordem'
 import { Route as FigurinosRouteImport } from './routes/figurinos'
 import { Route as FestivaisRouteImport } from './routes/festivais'
@@ -36,6 +37,11 @@ const TimelineRoute = TimelineRouteImport.update({
 const ProfessoresRoute = ProfessoresRouteImport.update({
   id: '/professores',
   path: '/professores',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PagamentosRoute = PagamentosRouteImport.update({
+  id: '/pagamentos',
+  path: '/pagamentos',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OrdemRoute = OrdemRouteImport.update({
@@ -100,6 +106,7 @@ export interface FileRoutesByFullPath {
   '/festivais': typeof FestivaisRoute
   '/figurinos': typeof FigurinosRoute
   '/ordem': typeof OrdemRoute
+  '/pagamentos': typeof PagamentosRoute
   '/professores': typeof ProfessoresRoute
   '/timeline': typeof TimelineRoute
   '/vinculos': typeof VinculosRoute
@@ -115,6 +122,7 @@ export interface FileRoutesByTo {
   '/festivais': typeof FestivaisRoute
   '/figurinos': typeof FigurinosRoute
   '/ordem': typeof OrdemRoute
+  '/pagamentos': typeof PagamentosRoute
   '/professores': typeof ProfessoresRoute
   '/timeline': typeof TimelineRoute
   '/vinculos': typeof VinculosRoute
@@ -131,6 +139,7 @@ export interface FileRoutesById {
   '/festivais': typeof FestivaisRoute
   '/figurinos': typeof FigurinosRoute
   '/ordem': typeof OrdemRoute
+  '/pagamentos': typeof PagamentosRoute
   '/professores': typeof ProfessoresRoute
   '/timeline': typeof TimelineRoute
   '/vinculos': typeof VinculosRoute
@@ -148,6 +157,7 @@ export interface FileRouteTypes {
     | '/festivais'
     | '/figurinos'
     | '/ordem'
+    | '/pagamentos'
     | '/professores'
     | '/timeline'
     | '/vinculos'
@@ -163,6 +173,7 @@ export interface FileRouteTypes {
     | '/festivais'
     | '/figurinos'
     | '/ordem'
+    | '/pagamentos'
     | '/professores'
     | '/timeline'
     | '/vinculos'
@@ -178,6 +189,7 @@ export interface FileRouteTypes {
     | '/festivais'
     | '/figurinos'
     | '/ordem'
+    | '/pagamentos'
     | '/professores'
     | '/timeline'
     | '/vinculos'
@@ -194,6 +206,7 @@ export interface RootRouteChildren {
   FestivaisRoute: typeof FestivaisRoute
   FigurinosRoute: typeof FigurinosRoute
   OrdemRoute: typeof OrdemRoute
+  PagamentosRoute: typeof PagamentosRoute
   ProfessoresRoute: typeof ProfessoresRoute
   TimelineRoute: typeof TimelineRoute
   VinculosRoute: typeof VinculosRoute
@@ -220,6 +233,13 @@ declare module '@tanstack/react-router' {
       path: '/professores'
       fullPath: '/professores'
       preLoaderRoute: typeof ProfessoresRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pagamentos': {
+      id: '/pagamentos'
+      path: '/pagamentos'
+      fullPath: '/pagamentos'
+      preLoaderRoute: typeof PagamentosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ordem': {
@@ -306,6 +326,7 @@ const rootRouteChildren: RootRouteChildren = {
   FestivaisRoute: FestivaisRoute,
   FigurinosRoute: FigurinosRoute,
   OrdemRoute: OrdemRoute,
+  PagamentosRoute: PagamentosRoute,
   ProfessoresRoute: ProfessoresRoute,
   TimelineRoute: TimelineRoute,
   VinculosRoute: VinculosRoute,

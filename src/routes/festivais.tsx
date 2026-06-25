@@ -409,6 +409,7 @@ function FestivalsPage() {
                 </div>
               )}
             </form>
+            </div>
           </div>
         </div>
       )}

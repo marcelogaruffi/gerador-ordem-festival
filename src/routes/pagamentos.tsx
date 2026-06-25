@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import React, { useState } from 'react'
-import { Plus, CheckCircle, Clock, Search, ChevronDown, ChevronUp, Check, DollarSign, QrCode, RotateCcw, X } from 'lucide-react'
+import { Plus, CheckCircle, Clock, Search, ChevronDown, ChevronUp, Check, DollarSign, QrCode, RotateCcw, X, Trash2 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { QRCodeSVG } from 'qrcode.react'
@@ -258,6 +258,22 @@ function PagamentosPage() {
     }
   })
 
+  const deleteAssignmentMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error: instError } = await supabase.from('costume_installments').delete().eq('assignment_id', id)
+      if (instError) throw instError
+
+      const { error } = await supabase.from('costume_assignments').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dancers_finance'] })
+    },
+    onError: (error: any) => {
+      alert(`Erro ao excluir pacote: ${error.message || error}`)
+    }
+  })
+
   const filteredDancers = dancers?.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase()))
 
   const toggleExpand = (id: string) => {
@@ -476,11 +492,23 @@ function PagamentosPage() {
                         <div className="space-y-8">
                           {dancer.costume_assignments?.map((assignment: any) => (
                             <div key={assignment.id} className="border border-gray-100 rounded-xl p-5 bg-gray-50/50">
-                              <div className="flex justify-between items-center mb-4">
+                              <div className="flex justify-between items-start mb-4">
                                 <div>
                                   <h4 className="font-bold text-lg text-gray-800">{assignment.costume_name || 'Figurino Desconhecido'}</h4>
                                   <p className="text-sm text-gray-500">Valor Total: {formatCurrency(assignment.total_value)}</p>
                                 </div>
+                                <button
+                                  onClick={() => {
+                                    if (window.confirm('Tem certeza que deseja excluir este pacote de figurinos? Todas as parcelas (pagas e pendentes) serão apagadas permanentemente.')) {
+                                      deleteAssignmentMutation.mutate(assignment.id)
+                                    }
+                                  }}
+                                  disabled={deleteAssignmentMutation.isPending}
+                                  className="text-danger hover:bg-danger/10 p-2 rounded-lg transition-colors flex items-center justify-center disabled:opacity-50"
+                                  title="Excluir pacote inteiro"
+                                >
+                                  <Trash2 size={20} />
+                                </button>
                               </div>
 
                               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

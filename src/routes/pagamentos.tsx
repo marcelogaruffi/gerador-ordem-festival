@@ -1,8 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
 import React, { useState } from 'react'
-import { Plus, CheckCircle, Clock, Search, ChevronDown, ChevronUp, Check, DollarSign } from 'lucide-react'
+import { Plus, CheckCircle, Clock, Search, ChevronDown, ChevronUp, Check, DollarSign, QrCode, RotateCcw, X } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { QRCodeSVG } from 'qrcode.react'
+import { generatePixPayload } from '../lib/pix'
 
 export const Route = createFileRoute('/pagamentos')({
   component: PagamentosPage,
@@ -27,6 +29,18 @@ function PagamentosPage() {
   const [payForm, setPayForm] = useState({
     paid_at: new Date().toISOString().split('T')[0],
     paid_amount: ''
+  })
+  
+  const [pixModal, setPixModal] = useState<{isOpen: boolean, payload: string, amount: number, pixKey: string}>({ isOpen: false, payload: '', amount: 0, pixKey: '' })
+
+  // Fetch Settings for PIX
+  const { data: settings } = useQuery({
+    queryKey: ['settings_pix'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('settings').select('pix_key').eq('id', 1).single()
+      if (error && error.code !== 'PGRST116') throw error
+      return data || { pix_key: '' }
+    }
   })
 
   // Fetch costumes
@@ -124,16 +138,14 @@ function PagamentosPage() {
 
   // Mutation to pay an installment
   const payMutation = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase
-        .from('costume_installments')
-        .update({ 
-          status: 'Pago', 
-          paid_at: new Date(payForm.paid_at).toISOString(),
-          paid_amount: parseFloat(payForm.paid_amount)
-        })
-        .eq('id', payModal.installment.id)
-      if (error) throw error
+    mutationFn: async ({ id, paid_at, paid_amount, revert }: { id: string, paid_at?: string, paid_amount?: number, revert?: boolean }) => {
+      if (revert) {
+        const { error } = await supabase.from('costume_installments').update({ status: 'Pendente', paid_at: null, paid_amount: null }).eq('id', id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('costume_installments').update({ status: 'Pago', paid_at, paid_amount }).eq('id', id)
+        if (error) throw error
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dancers_finance'] })
@@ -325,19 +337,37 @@ function PagamentosPage() {
                                     </div>
                                     
                                     {inst.status === 'Pendente' ? (
-                                      <button 
+                                      <div className="flex gap-2">
+                                        <button 
+                                          onClick={() => {
+                                            setPayModal({ isOpen: true, installment: inst })
+                                            setPayForm({ paid_at: new Date().toISOString().split('T')[0], paid_amount: inst.amount.toString() })
+                                          }}
+                                          className="w-full flex items-center justify-center gap-2 bg-primary/10 text-primary hover:bg-primary hover:text-white transition-colors py-2 rounded-lg text-sm font-medium"
+                                        >
+                                          <DollarSign size={16} /> Dar Baixa
+                                        </button>
+                                        {settings?.pix_key && (
+                                          <button
+                                            onClick={() => setPixModal({ isOpen: true, amount: parseFloat(inst.amount), payload: generatePixPayload(settings.pix_key, parseFloat(inst.amount), 'Coxia', 'Brasil', `FIG${inst.id.substring(0,8)}`), pixKey: settings.pix_key })}
+                                            className="px-3 flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors rounded-lg"
+                                            title="Gerar PIX"
+                                          >
+                                            <QrCode size={16} />
+                                          </button>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div 
+                                        className="w-full flex flex-col items-center justify-center gap-1 text-success py-2 text-sm font-medium cursor-pointer hover:bg-success/10 rounded-lg transition-colors border border-transparent hover:border-success/20"
                                         onClick={() => {
                                           setPayModal({ isOpen: true, installment: inst })
-                                          setPayForm({ paid_at: new Date().toISOString().split('T')[0], paid_amount: inst.amount.toString() })
+                                          setPayForm({ paid_at: new Date(inst.paid_at).toISOString().split('T')[0], paid_amount: (inst.paid_amount || inst.amount).toString() })
                                         }}
-                                        className="w-full flex items-center justify-center gap-2 bg-primary/10 text-primary hover:bg-primary hover:text-white transition-colors py-2 rounded-lg text-sm font-medium"
+                                        title="Clique para editar ou reverter"
                                       >
-                                        <DollarSign size={16} /> Dar Baixa
-                                      </button>
-                                    ) : (
-                                      <div className="w-full flex flex-col items-center justify-center gap-1 text-success py-2 text-sm font-medium">
                                         <div className="flex items-center gap-1"><Check size={16} /> Pago em {new Date(inst.paid_at).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</div>
-                                        <span className="text-xs text-gray-500 font-normal">Valor pago: {formatCurrency(inst.paid_amount || inst.amount)}</span>
+                                        <span className="text-xs text-success/70 font-normal">Editar ({formatCurrency(inst.paid_amount || inst.amount)})</span>
                                       </div>
                                     )}
                                   </div>
@@ -460,13 +490,18 @@ function PagamentosPage() {
         </div>
       )}
 
-      {/* Modal Dar Baixa */}
+      {/* Modal Dar Baixa / Editar */}
       {payModal.isOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
-            <h2 className="text-xl font-serif text-coxia-dark mb-4">Confirmar Pagamento</h2>
+            <h2 className="text-xl font-serif text-coxia-dark mb-4">
+              {payModal.installment?.status === 'Pago' ? 'Editar Pagamento' : 'Confirmar Pagamento'}
+            </h2>
             
-            <form onSubmit={(e) => { e.preventDefault(); payMutation.mutate() }} className="space-y-4">
+            <form onSubmit={(e) => { 
+              e.preventDefault(); 
+              payMutation.mutate({ id: payModal.installment.id, paid_at: new Date(payForm.paid_at).toISOString(), paid_amount: parseFloat(payForm.paid_amount) }) 
+            }} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Data do Pagamento</label>
                 <input 
@@ -490,6 +525,22 @@ function PagamentosPage() {
                 />
               </div>
 
+              {payModal.installment?.status === 'Pago' && (
+                <div className="pt-2 border-t border-gray-100">
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      if(confirm("Tem certeza que deseja reverter para Pendente?")) {
+                        payMutation.mutate({ id: payModal.installment.id, revert: true })
+                      }
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-danger/10 text-danger rounded-xl hover:bg-danger hover:text-white transition-colors font-medium text-sm"
+                  >
+                    <RotateCcw size={16} /> Reverter para Pendente
+                  </button>
+                </div>
+              )}
+
               <div className="pt-4 flex gap-3">
                 <button 
                   type="button" 
@@ -503,10 +554,47 @@ function PagamentosPage() {
                   disabled={payMutation.isPending}
                   className="flex-1 bg-success text-white px-4 py-2 rounded-xl hover:bg-success/90 font-medium disabled:opacity-50"
                 >
-                  {payMutation.isPending ? 'Salvando...' : 'Dar Baixa'}
+                  {payMutation.isPending ? 'Salvando...' : 'Salvar'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal PIX */}
+      {pixModal.isOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-sm p-6 animate-in zoom-in-95 duration-200 flex flex-col items-center text-center">
+            <button 
+              onClick={() => setPixModal({ isOpen: false, payload: '', amount: 0, pixKey: '' })}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 bg-gray-100 rounded-full p-1 transition-colors"
+            >
+              <X size={20} />
+            </button>
+            
+            <div className="w-16 h-16 bg-primary/10 text-primary rounded-full flex items-center justify-center mb-4">
+              <QrCode size={32} />
+            </div>
+            
+            <h2 className="text-2xl font-serif text-gray-800 mb-1">Pagamento via PIX</h2>
+            <p className="text-gray-500 mb-6 font-bold text-lg">{formatCurrency(pixModal.amount)}</p>
+            
+            <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm mb-6 inline-block">
+              <QRCodeSVG 
+                value={pixModal.payload} 
+                size={200}
+                bgColor={"#ffffff"}
+                fgColor={"#1f2937"}
+                level={"M"}
+                includeMargin={false}
+              />
+            </div>
+            
+            <div className="bg-gray-50 rounded-xl p-3 w-full border border-gray-200">
+              <p className="text-xs text-gray-500 mb-1 uppercase font-bold">Chave PIX do Festival</p>
+              <p className="text-sm font-mono text-gray-800 select-all">{pixModal.pixKey}</p>
+            </div>
           </div>
         </div>
       )}

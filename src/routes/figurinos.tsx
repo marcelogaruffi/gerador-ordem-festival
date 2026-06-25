@@ -16,6 +16,7 @@ function FigurinosPage() {
   const [formData, setFormData] = useState({ name: '', description: '', image_url: '', price: '' })
   const [searchTerm, setSearchTerm] = useState('')
   const [isUploading, setIsUploading] = useState(false)
+  const [notesModal, setNotesModal] = useState<{isOpen: boolean, id: string, notes: string}>({isOpen: false, id: '', notes: ''})
 
   const { data: costumes, isLoading } = useQuery({
     queryKey: ['costumes'],
@@ -311,17 +312,13 @@ function FigurinosPage() {
                       <td className="px-6 py-4 font-medium text-gray-800">{d.dancers?.name || 'Desconhecido'}</td>
                       <td className="px-6 py-4 text-gray-600 truncate max-w-[200px]" title={d.costume_name}>{d.costume_name || 'N/A'}</td>
                       <td className="px-6 py-4">
-                        <input 
-                          type="text" 
-                          defaultValue={d.notes || ''} 
-                          placeholder="Ex: Faltou a saia"
-                          onBlur={(e) => {
-                            if(e.target.value !== d.notes) {
-                              updateDeliveryMutation.mutate({ id: d.id, notes: e.target.value })
-                            }
-                          }}
-                          className="w-full px-3 py-1.5 text-sm bg-transparent border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-primary/20 transition-all hover:bg-white focus:bg-white"
-                        />
+                        <button 
+                          onClick={() => setNotesModal({ isOpen: true, id: d.id, notes: d.notes || '' })}
+                          className={`flex items-center gap-1 text-sm font-medium transition-colors px-3 py-1.5 rounded-lg border ${d.notes ? 'bg-primary/5 text-primary border-primary/20 hover:bg-primary/10' : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'}`}
+                        >
+                          <span className="text-base">📝</span>
+                          {d.notes ? 'Ver Obs' : 'Adicionar'}
+                        </button>
                       </td>
                       <td className="px-6 py-4">
                         {d.delivered ? (
@@ -439,6 +436,38 @@ function FigurinosPage() {
           </div>
         </div>
       )}
+      {/* Modal Observações */}
+      {notesModal.isOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
+            <h2 className="text-xl font-serif text-coxia-dark mb-4">Observações de Entrega</h2>
+            <textarea 
+              value={notesModal.notes}
+              onChange={e => setNotesModal({...notesModal, notes: e.target.value})}
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20 min-h-[120px] resize-none mb-4"
+              placeholder="Ex: Faltou a saia, entregar no próximo ensaio..."
+            />
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setNotesModal({isOpen: false, id: '', notes: ''})}
+                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 font-medium"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={() => {
+                  updateDeliveryMutation.mutate({ id: notesModal.id, notes: notesModal.notes })
+                  setNotesModal({isOpen: false, id: '', notes: ''})
+                }}
+                className="flex-1 bg-primary text-white px-4 py-2 rounded-xl hover:bg-primary/90 font-medium"
+              >
+                Salvar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+

@@ -14,6 +14,7 @@ function SettingsPage() {
   const [tolerance, setTolerance] = useState('1')
   const [theme, setTheme] = useState('light')
   const [notifications, setNotifications] = useState(true)
+  const [pixKey, setPixKey] = useState('')
 
   // Fetch Settings
   const { data: currentSettings, isLoading } = useQuery({
@@ -21,7 +22,7 @@ function SettingsPage() {
     queryFn: async () => {
       const { data, error } = await supabase.from('settings').select('*').eq('id', 1).single()
       if (error && error.code !== 'PGRST116') throw error
-      return data || { tolerance: 1, notifications: true, theme: 'light' }
+      return data || { tolerance: 1, notifications: true, theme: 'light', pix_key: '' }
     }
   })
 
@@ -31,6 +32,7 @@ function SettingsPage() {
       setTolerance(currentSettings.tolerance.toString())
       setNotifications(currentSettings.notifications)
       setTheme(currentSettings.theme)
+      setPixKey(currentSettings.pix_key || '')
     }
   }, [currentSettings])
 
@@ -42,6 +44,7 @@ function SettingsPage() {
         tolerance: parseInt(tolerance, 10),
         notifications,
         theme,
+        pix_key: pixKey,
         updated_at: new Date().toISOString()
       }
       const { error } = await supabase.from('settings').upsert(payload)

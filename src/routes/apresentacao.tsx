@@ -45,7 +45,12 @@ function ApresentacaoPage() {
           choreographies (
             name,
             style,
-            duration
+            duration,
+            choreography_classes (
+              classes (
+                modality
+              )
+            )
           )
         `)
         .eq('festival_id', selectedFestival)
@@ -66,6 +71,12 @@ function ApresentacaoPage() {
     if (!durationStr) return 0
     const [m, s] = durationStr.split(':').map(Number)
     return (m || 0) * 60 + (s || 0)
+  }
+
+  // Helper to get class names
+  const getChoreoClasses = (choreo: any) => {
+    if (!choreo?.choreography_classes || choreo.choreography_classes.length === 0) return 'Sem turma vinculada'
+    return choreo.choreography_classes.map((cc: any) => cc.classes?.modality).join(', ')
   }
 
   // Handle local folder selection
@@ -406,7 +417,7 @@ function ApresentacaoPage() {
               <div>
                 <p className="text-sm text-primary font-bold tracking-widest uppercase mb-2">No Palco Agora</p>
                 <h2 className="text-5xl font-serif font-bold mb-2">{currentChoreo?.name}</h2>
-                <p className="text-xl text-gray-400">{currentChoreo?.style || 'Sem estilo'} </p>
+                <p className="text-xl text-gray-400">{getChoreoClasses(currentChoreo)} </p>
               </div>
               
               <button 
@@ -494,7 +505,7 @@ function ApresentacaoPage() {
                 No Palco Agora
               </p>
               <h2 className="text-8xl font-serif font-bold mb-6 text-white leading-tight">{currentChoreo?.name}</h2>
-              <p className="text-4xl text-gray-400 mb-20">{currentChoreo?.style || 'Sem estilo'} </p>
+              <p className="text-4xl text-gray-400 mb-20">{getChoreoClasses(currentChoreo)} </p>
 
               <div className="flex flex-col items-center w-full">
                 <span className="text-gray-500 uppercase tracking-widest text-2xl mb-6 font-bold">Tempo Restante</span>
@@ -512,7 +523,7 @@ function ApresentacaoPage() {
                   <div key={item.order_index} className="flex flex-col border-l-4 border-gray-800 pl-6 py-2">
                     <span className="text-gray-500 font-bold mb-1">#{item.order_index}</span>
                     <h3 className="text-3xl font-serif text-white mb-2">{item.choreographies.name}</h3>
-                    <p className="text-xl text-gray-400">{item.choreographies.style}</p>
+                    <p className="text-xl text-gray-400">{getChoreoClasses(item.choreographies)}</p>
                   </div>
                 ))}
                 

@@ -48,7 +48,6 @@ function PagamentosPage() {
         .select(`
           id, name,
           costume_assignments (
-          costume_assignments (
             id, costume_name, total_value, installments_count, created_at,
             costume_installments (
               id, installment_number, amount, due_date, status, paid_at, paid_amount

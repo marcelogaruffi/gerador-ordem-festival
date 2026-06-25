@@ -178,7 +178,9 @@ function PagamentosPage() {
             installment_number: startNumber + i - 1,
             amount: instAmount > 0 ? instAmount : 0,
             due_date: dueDate.toISOString().split('T')[0],
-            status: 'Pendente'
+            status: instAmount > 0 ? 'Pendente' : 'Pago',
+            paid_at: instAmount > 0 ? null : new Date().toISOString().split('T')[0],
+            paid_amount: instAmount > 0 ? null : 0
           })
         }
 
@@ -243,8 +245,13 @@ function PagamentosPage() {
               pAmount += Math.abs(remainingDiff)
               remainingDiff = 0
             }
-            
-            await supabase.from('costume_installments').update({ amount: parseFloat(pAmount.toFixed(2)) }).eq('id', p.id)
+            const updatePayload: any = { amount: parseFloat(pAmount.toFixed(2)) }
+            if (pAmount <= 0) {
+              updatePayload.status = 'Pago'
+              updatePayload.paid_at = new Date().toISOString().split('T')[0]
+              updatePayload.paid_amount = 0
+            }
+            await supabase.from('costume_installments').update(updatePayload).eq('id', p.id)
           }
         }
       }

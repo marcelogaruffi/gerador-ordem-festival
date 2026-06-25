@@ -39,10 +39,10 @@ export function Sidebar() {
         ))}
 
         {/* Gestão Financeira Submenu */}
-        <div className="pt-2">
+        <div className="pt-1">
           <button 
             onClick={() => setIsFinanceOpen(!isFinanceOpen)}
-            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all text-gray-300 hover:bg-primary/20 hover:text-primary ${isFinanceOpen ? 'bg-primary/10 text-primary' : ''}`}
+            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all hover:bg-primary/20 hover:text-primary ${isFinanceOpen ? 'text-primary' : 'text-gray-300'}`}
           >
             <div className="flex items-center gap-3">
               <PieChart size={20} />
@@ -52,22 +52,22 @@ export function Sidebar() {
           </button>
           
           {isFinanceOpen && (
-            <div className="mt-1 flex flex-col gap-1 pl-4 border-l-2 border-gray-800 ml-6">
+            <div className="mt-1 flex flex-col gap-1">
               <Link
                 to="/pagamentos"
-                className="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all hover:bg-primary/20 hover:text-primary text-gray-400 text-sm"
-                activeProps={{ className: 'bg-primary/20 text-primary font-medium' }}
+                className="flex items-center gap-3 pl-11 pr-4 py-3 rounded-xl transition-all hover:bg-primary/20 hover:text-primary text-gray-400"
+                activeProps={{ className: 'bg-primary text-white hover:bg-primary hover:text-white' }}
               >
                 <DollarSign size={18} />
-                Recebimentos (Alunos)
+                <span className="font-medium text-sm">Recebimentos</span>
               </Link>
               <Link
                 to="/caixa"
-                className="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all hover:bg-primary/20 hover:text-primary text-gray-400 text-sm"
-                activeProps={{ className: 'bg-primary/20 text-primary font-medium' }}
+                className="flex items-center gap-3 pl-11 pr-4 py-3 rounded-xl transition-all hover:bg-primary/20 hover:text-primary text-gray-400"
+                activeProps={{ className: 'bg-primary text-white hover:bg-primary hover:text-white' }}
               >
                 <Wallet size={18} />
-                Fluxo de Caixa & Despesas
+                <span className="font-medium text-sm">Fluxo de Caixa</span>
               </Link>
             </div>
           )}

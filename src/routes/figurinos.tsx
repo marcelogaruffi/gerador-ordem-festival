@@ -12,7 +12,8 @@ function FigurinosPage() {
   const queryClient = useQueryClient()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [formData, setFormData] = useState({ name: '', description: '', image_url: '' })
+  const [activeTab, setActiveTab] = useState<'catalogo' | 'entregas'>('catalogo')
+  const [formData, setFormData] = useState({ name: '', description: '', image_url: '', price: '' })
   const [searchTerm, setSearchTerm] = useState('')
   const [isUploading, setIsUploading] = useState(false)
 
@@ -28,6 +29,29 @@ function FigurinosPage() {
         .order('created_at', { ascending: false })
       if (error) throw error
       return data
+    }
+  })
+
+  // Fetch das Entregas
+  const { data: deliveries, isLoading: isLoadingDeliveries } = useQuery({
+    queryKey: ['deliveries'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('costume_assignments')
+        .select(`id, costume_name, delivered, dancers ( name )`)
+      if (error) throw error
+      return data
+    },
+    enabled: activeTab === 'entregas'
+  })
+
+  const toggleDeliveryMutation = useMutation({
+    mutationFn: async ({ id, delivered }: { id: string, delivered: boolean }) => {
+      const { error } = await supabase.from('costume_assignments').update({ delivered }).eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deliveries'] })
     }
   })
 
@@ -83,14 +107,14 @@ function FigurinosPage() {
 
   const openEditModal = (costume: any) => {
     setEditingId(costume.id)
-    setFormData({ name: costume.name, description: costume.description || '', image_url: costume.image_url || '' })
+    setFormData({ name: costume.name, description: costume.description || '', image_url: costume.image_url || '', price: costume.price ? costume.price.toString() : '' })
     setIsModalOpen(true)
   }
 
   const closeModal = () => {
     setIsModalOpen(false)
     setEditingId(null)
-    setFormData({ name: '', description: '', image_url: '' })
+    setFormData({ name: '', description: '', image_url: '', price: '' })
   }
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -135,7 +159,25 @@ function FigurinosPage() {
         </button>
       </div>
 
-      {/* Toolbar */}
+      {/* Tabs */}
+      <div className="flex border-b border-gray-200">
+        <button
+          onClick={() => setActiveTab('catalogo')}
+          className={`px-6 py-3 font-medium transition-colors ${activeTab === 'catalogo' ? 'border-b-2 border-primary text-primary' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          Catálogo de Figurinos
+        </button>
+        <button
+          onClick={() => setActiveTab('entregas')}
+          className={`px-6 py-3 font-medium transition-colors ${activeTab === 'entregas' ? 'border-b-2 border-primary text-primary' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          Controle de Entregas
+        </button>
+      </div>
+
+      {activeTab === 'catalogo' && (
+        <>
+          {/* Toolbar */}
       <div className="flex gap-4 mb-6">
         <div className="flex-1 relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
@@ -186,7 +228,10 @@ function FigurinosPage() {
                 </div>
                 
                 <div className="p-5 flex-1 flex flex-col">
-                  <h3 className="font-serif font-bold text-lg text-gray-800 mb-1">{costume.name}</h3>
+                  <div className="flex justify-between items-start mb-1">
+                    <h3 className="font-serif font-bold text-lg text-gray-800">{costume.name}</h3>
+                    {costume.price && <span className="font-bold text-success text-sm flex-shrink-0">R$ {costume.price}</span>}
+                  </div>
                   <p className="text-sm text-gray-500 line-clamp-2 flex-1 mb-4">{costume.description || 'Sem descrição'}</p>
                   
                   <div className="flex items-center gap-2 text-xs font-medium text-primary bg-primary/5 px-3 py-1.5 rounded-full w-fit">
@@ -197,6 +242,48 @@ function FigurinosPage() {
               </div>
             )
           })}
+        </div>
+      )}
+      </>
+      )}
+
+      {activeTab === 'entregas' && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          {isLoadingDeliveries ? (
+            <div className="text-center py-12 text-gray-500">Carregando entregas...</div>
+          ) : (
+            <table className="w-full text-left">
+              <thead className="bg-gray-50 border-b border-gray-100">
+                <tr>
+                  <th className="px-6 py-4 font-serif text-gray-700">Aluno</th>
+                  <th className="px-6 py-4 font-serif text-gray-700">Figurinos Vinculados</th>
+                  <th className="px-6 py-4 font-serif text-gray-700 text-center w-32">Entregue?</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {deliveries?.length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="px-6 py-8 text-center text-gray-500">Nenhum figurino vinculado ainda. Vá em Pagamentos para vincular figurinos.</td>
+                  </tr>
+                )}
+                {deliveries?.map((d: any) => (
+                  <tr key={d.id} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="px-6 py-4 font-medium text-gray-800">{d.dancers?.name || 'Desconhecido'}</td>
+                    <td className="px-6 py-4 text-gray-600">{d.costume_name || 'N/A'}</td>
+                    <td className="px-6 py-4">
+                      <button
+                        onClick={() => toggleDeliveryMutation.mutate({ id: d.id, delivered: !d.delivered })}
+                        disabled={toggleDeliveryMutation.isPending}
+                        className={`w-full py-2 rounded-lg font-bold text-sm transition-colors border ${d.delivered ? 'bg-success/10 text-success border-success/20 hover:bg-success/20' : 'bg-gray-100 text-gray-400 border-gray-200 hover:bg-gray-200'}`}
+                      >
+                        {d.delivered ? 'Sim ✅' : 'Pendente'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
 
@@ -223,6 +310,18 @@ function FigurinosPage() {
                   onChange={e => setFormData({...formData, name: e.target.value})}
                   className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                   placeholder="Ex: Vestido Vermelho com Lantejoulas"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Preço Base (R$)</label>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  value={formData.price}
+                  onChange={e => setFormData({...formData, price: e.target.value})}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                  placeholder="Ex: 150.00"
                 />
               </div>
 

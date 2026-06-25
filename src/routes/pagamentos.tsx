@@ -17,6 +17,7 @@ function PagamentosPage() {
   
   const [assignForm, setAssignForm] = useState({
     selectedCostumes: [] as any[],
+    discount: 0,
     total_value: '',
     installments_count: 1,
     initial_due_date: new Date().toISOString().split('T')[0]
@@ -39,7 +40,7 @@ function PagamentosPage() {
   })
 
   // Fetch all dancers with their assignments and installments
-  const { data: dancers, isLoading } = useQuery({
+  const { data: dancers, isLoading, isError, error: dancersError } = useQuery({
     queryKey: ['dancers_finance'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -115,7 +116,7 @@ function PagamentosPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dancers_finance'] })
       setIsAssignModalOpen(false)
-      setAssignForm({ selectedCostumes: [], total_value: '', installments_count: 1, initial_due_date: new Date().toISOString().split('T')[0] })
+      setAssignForm({ selectedCostumes: [], discount: 0, total_value: '', installments_count: 1, initial_due_date: new Date().toISOString().split('T')[0] })
     }
   })
 
@@ -147,7 +148,7 @@ function PagamentosPage() {
   const openAssignModal = (dancer: any, e: React.MouseEvent) => {
     e.stopPropagation()
     setSelectedDancerForAssign(dancer)
-    setAssignForm({ selectedCostumes: [], total_value: '', installments_count: 1, initial_due_date: new Date().toISOString().split('T')[0] })
+    setAssignForm({ selectedCostumes: [], discount: 0, total_value: '', installments_count: 1, initial_due_date: new Date().toISOString().split('T')[0] })
     setIsAssignModalOpen(true)
   }
 
@@ -163,10 +164,25 @@ function PagamentosPage() {
       
       // Auto sum prices
       const sum = newSelected.reduce((acc, c) => acc + (parseFloat(c.price) || 0), 0)
+      const discountedSum = sum * (1 - prev.discount / 100)
+      
       return {
         ...prev,
         selectedCostumes: newSelected,
-        total_value: sum > 0 ? sum.toFixed(2) : ''
+        total_value: discountedSum > 0 ? discountedSum.toFixed(2) : ''
+      }
+    })
+  }
+
+  const handleDiscountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = parseFloat(e.target.value) || 0
+    setAssignForm(prev => {
+      const sum = prev.selectedCostumes.reduce((acc, c) => acc + (parseFloat(c.price) || 0), 0)
+      const discountedSum = sum * (1 - val / 100)
+      return {
+        ...prev,
+        discount: val,
+        total_value: discountedSum > 0 ? discountedSum.toFixed(2) : ''
       }
     })
   }
@@ -203,6 +219,16 @@ function PagamentosPage() {
 
         {isLoading ? (
           <div className="text-center py-8 text-gray-500">Carregando dados financeiros...</div>
+        ) : isError ? (
+          <div className="text-center py-12 px-4 rounded-xl border border-danger/20 bg-danger/5">
+            <h3 className="text-danger font-bold text-lg mb-2">Erro de Sincronização!</h3>
+            <p className="text-danger-dark mb-4 max-w-lg mx-auto">
+              O sistema não conseguiu carregar os dados. Isso geralmente acontece se o banco de dados não foi atualizado com a última versão.
+            </p>
+            <p className="text-sm font-medium text-danger/80">
+              Por favor, certifique-se de executar o script <strong>sql_financeiro_v4.sql</strong> no Supabase.
+            </p>
+          </div>
         ) : (
           <div className="space-y-4">
             {filteredDancers?.map(dancer => {
@@ -350,7 +376,19 @@ function PagamentosPage() {
                     className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20"
                   />
                 </div>
-                <div className="flex-1">
+                <div className="flex-[0.5]">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Desconto (%)</label>
+                  <input 
+                    type="number" 
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    value={assignForm.discount}
+                    onChange={handleDiscountChange}
+                    className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+                <div className="flex-[0.8]">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Valor Total (R$)</label>
                   <input 
                     type="number" 

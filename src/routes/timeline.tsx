@@ -124,12 +124,28 @@ function TimelinePage() {
   })
 
   const reorderMutation = useMutation({
-    mutationFn: async ({ id1, index1, id2, index2 }: { id1: string, index1: number, id2: string, index2: number }) => {
-      // Swap order_index
-      const { error: e1 } = await supabase.from('festival_choreographies').update({ order_index: index2 }).eq('id', id1)
-      if (e1) throw e1
-      const { error: e2 } = await supabase.from('festival_choreographies').update({ order_index: index1 }).eq('id', id2)
-      if (e2) throw e2
+    mutationFn: async ({ itemId, newIndex }: { itemId: string, newIndex: number }) => {
+      if (!timelineItems) return
+      
+      const items = [...timelineItems]
+      const oldIndex = items.findIndex(i => i.id === itemId)
+      if (oldIndex === -1) return
+      
+      // Remove from old pos
+      const [movedItem] = items.splice(oldIndex, 1)
+      
+      // Ensure newIndex is within bounds
+      const clampedIndex = Math.max(0, Math.min(newIndex, items.length))
+      items.splice(clampedIndex, 0, movedItem)
+      
+      // Update all items to enforce strict 1,2,3,4... ordering
+      const promises = items.map((item, index) => {
+        return supabase.from('festival_choreographies')
+          .update({ order_index: index + 1 })
+          .eq('id', item.id)
+      })
+      
+      await Promise.all(promises)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['timeline', selectedFestival] })
@@ -139,21 +155,13 @@ function TimelinePage() {
   const moveUp = (currentIndex: number) => {
     if (currentIndex === 0 || !timelineItems) return
     const current = timelineItems[currentIndex]
-    const prev = timelineItems[currentIndex - 1]
-    reorderMutation.mutate({
-      id1: current.id, index1: current.order_index,
-      id2: prev.id, index2: prev.order_index
-    })
+    reorderMutation.mutate({ itemId: current.id, newIndex: currentIndex - 1 })
   }
 
   const moveDown = (currentIndex: number) => {
     if (!timelineItems || currentIndex === timelineItems.length - 1) return
     const current = timelineItems[currentIndex]
-    const next = timelineItems[currentIndex + 1]
-    reorderMutation.mutate({
-      id1: current.id, index1: current.order_index,
-      id2: next.id, index2: next.order_index
-    })
+    reorderMutation.mutate({ itemId: current.id, newIndex: currentIndex + 1 })
   }
 
   const syncMutation = useMutation({
@@ -404,9 +412,27 @@ function TimelinePage() {
               return (
                 <div key={item.id} className={`relative z-10 flex items-center gap-4 p-4 rounded-xl border ${statusClasses} transition-all`}>
                   
-                  {/* Order Number */}
-                  <div className="w-12 h-12 bg-white border-2 border-gray-200 rounded-full flex items-center justify-center font-bold text-gray-700 shrink-0 shadow-sm">
-                    {index + 1}
+                  {/* Order Number Edit */}
+                  <div className="w-12 h-12 bg-white border-2 border-gray-200 rounded-full flex items-center justify-center shrink-0 shadow-sm overflow-hidden focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+                    <input
+                      key={`${item.id}-${index}`}
+                      type="number"
+                      defaultValue={index + 1}
+                      onBlur={(e) => {
+                        const val = parseInt(e.target.value)
+                        if (!isNaN(val) && val !== index + 1) {
+                          reorderMutation.mutate({ itemId: item.id, newIndex: val - 1 })
+                        } else {
+                          e.target.value = (index + 1).toString()
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.currentTarget.blur()
+                        }
+                      }}
+                      className="w-full h-full text-center font-bold text-gray-700 bg-transparent outline-none m-0 p-0 appearance-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
                   </div>
 
                   {/* Move Buttons */}

@@ -3,6 +3,8 @@ import React, { useState, useMemo } from 'react'
 import { Calendar, Plus, GripVertical, AlertTriangle, CheckCircle, ArrowUp, ArrowDown, Trash2, Clock, ListOrdered, Printer, RefreshCw } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 export const Route = createFileRoute('/timeline')({
   component: TimelinePage,
@@ -250,23 +252,59 @@ function TimelinePage() {
             Sincronizar Elencos
           </button>
           <button 
-            onClick={() => window.print()}
+            onClick={() => {
+              if (!timelineItems || timelineItems.length === 0) return
+              const doc = new jsPDF('p', 'pt', 'a4')
+              doc.text("Ordem do Festival", 40, 40)
+              
+              const body = timelineItems.map((item, index) => {
+                const name = item.choreographies?.name || ''
+                const style = item.choreographies?.style || ''
+                const duration = item.choreographies?.duration || ''
+                const dancersList = item.choreographies?.choreography_dancers
+                  ?.filter((c: any) => c.is_exempt !== true)
+                  ?.map((c: any) => c.dancers?.name)
+                  ?.filter(Boolean) || []
+                
+                return [
+                  (index + 1).toString(),
+                  name,
+                  style,
+                  duration,
+                  dancersList.join(', ')
+                ]
+              })
+
+              autoTable(doc, {
+                startY: 60,
+                head: [['Ordem', 'Coreografia', 'Estilo', 'Duração', 'Elenco']],
+                body: body,
+              })
+              
+              doc.save("Ordem_Festival.pdf")
+            }}
             disabled={!timelineItems || timelineItems.length === 0}
             className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-6 py-2.5 rounded-xl font-medium hover:bg-gray-50 transition-all shadow-sm disabled:opacity-50"
           >
             <Printer size={20} />
-            Imprimir (PDF)
+            Baixar PDF
           </button>
           <button 
             onClick={() => {
               if (!timelineItems || timelineItems.length === 0) return
-              let csv = "Ordem;Coreografia;Estilo;Duracao\n"
+              let csv = "Ordem;Coreografia;Estilo;Duracao;Elenco\n"
               timelineItems.forEach((item, index) => {
-                if (index === 0) return
                 const name = item.choreographies?.name || ''
                 const style = item.choreographies?.style || ''
                 const duration = item.choreographies?.duration || ''
-                csv += `${index};"${name}";"${style}";"${duration}"\n`
+                
+                const dancersList = item.choreographies?.choreography_dancers
+                  ?.filter((c: any) => c.is_exempt !== true)
+                  ?.map((c: any) => c.dancers?.name)
+                  ?.filter(Boolean) || []
+                const dancersStr = dancersList.join(', ')
+
+                csv += `${index + 1};"${name}";"${style}";"${duration}";"${dancersStr}"\n`
               })
               const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
               const link = document.createElement("a")
@@ -401,6 +439,20 @@ function TimelinePage() {
                         </span>
                       )}
                     </div>
+
+                    {(() => {
+                      const dancersList = item.choreographies?.choreography_dancers
+                        ?.filter((c: any) => c.is_exempt !== true)
+                        ?.map((c: any) => c.dancers?.name)
+                        ?.filter(Boolean) || []
+                      
+                      if (dancersList.length === 0) return null
+                      return (
+                        <div className="mt-1 text-xs text-gray-500 italic">
+                          <span className="font-semibold">Elenco:</span> {dancersList.join(', ')}
+                        </div>
+                      )
+                    })()}
                     
                     {/* Conflict Messages */}
                     {conflicts.status !== 'green' && (

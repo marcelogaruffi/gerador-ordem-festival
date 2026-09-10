@@ -14,6 +14,7 @@ import { Route as TimelineRouteImport } from './routes/timeline'
 import { Route as ProfessoresRouteImport } from './routes/professores'
 import { Route as PagamentosRouteImport } from './routes/pagamentos'
 import { Route as OrdemRouteImport } from './routes/ordem'
+import { Route as ImportacoesRouteImport } from './routes/importacoes'
 import { Route as FigurinosRouteImport } from './routes/figurinos'
 import { Route as FestivaisRouteImport } from './routes/festivais'
 import { Route as CoreografiasRouteImport } from './routes/coreografias'
@@ -48,6 +49,11 @@ const PagamentosRoute = PagamentosRouteImport.update({
 const OrdemRoute = OrdemRouteImport.update({
   id: '/ordem',
   path: '/ordem',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ImportacoesRoute = ImportacoesRouteImport.update({
+  id: '/importacoes',
+  path: '/importacoes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FigurinosRoute = FigurinosRouteImport.update({
@@ -112,6 +118,7 @@ export interface FileRoutesByFullPath {
   '/coreografias': typeof CoreografiasRoute
   '/festivais': typeof FestivaisRoute
   '/figurinos': typeof FigurinosRoute
+  '/importacoes': typeof ImportacoesRoute
   '/ordem': typeof OrdemRoute
   '/pagamentos': typeof PagamentosRoute
   '/professores': typeof ProfessoresRoute
@@ -129,6 +136,7 @@ export interface FileRoutesByTo {
   '/coreografias': typeof CoreografiasRoute
   '/festivais': typeof FestivaisRoute
   '/figurinos': typeof FigurinosRoute
+  '/importacoes': typeof ImportacoesRoute
   '/ordem': typeof OrdemRoute
   '/pagamentos': typeof PagamentosRoute
   '/professores': typeof ProfessoresRoute
@@ -147,6 +155,7 @@ export interface FileRoutesById {
   '/coreografias': typeof CoreografiasRoute
   '/festivais': typeof FestivaisRoute
   '/figurinos': typeof FigurinosRoute
+  '/importacoes': typeof ImportacoesRoute
   '/ordem': typeof OrdemRoute
   '/pagamentos': typeof PagamentosRoute
   '/professores': typeof ProfessoresRoute
@@ -166,6 +175,7 @@ export interface FileRouteTypes {
     | '/coreografias'
     | '/festivais'
     | '/figurinos'
+    | '/importacoes'
     | '/ordem'
     | '/pagamentos'
     | '/professores'
@@ -183,6 +193,7 @@ export interface FileRouteTypes {
     | '/coreografias'
     | '/festivais'
     | '/figurinos'
+    | '/importacoes'
     | '/ordem'
     | '/pagamentos'
     | '/professores'
@@ -200,6 +211,7 @@ export interface FileRouteTypes {
     | '/coreografias'
     | '/festivais'
     | '/figurinos'
+    | '/importacoes'
     | '/ordem'
     | '/pagamentos'
     | '/professores'
@@ -218,6 +230,7 @@ export interface RootRouteChildren {
   CoreografiasRoute: typeof CoreografiasRoute
   FestivaisRoute: typeof FestivaisRoute
   FigurinosRoute: typeof FigurinosRoute
+  ImportacoesRoute: typeof ImportacoesRoute
   OrdemRoute: typeof OrdemRoute
   PagamentosRoute: typeof PagamentosRoute
   ProfessoresRoute: typeof ProfessoresRoute
@@ -260,6 +273,13 @@ declare module '@tanstack/react-router' {
       path: '/ordem'
       fullPath: '/ordem'
       preLoaderRoute: typeof OrdemRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/importacoes': {
+      id: '/importacoes'
+      path: '/importacoes'
+      fullPath: '/importacoes'
+      preLoaderRoute: typeof ImportacoesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/figurinos': {
@@ -346,6 +366,7 @@ const rootRouteChildren: RootRouteChildren = {
   CoreografiasRoute: CoreografiasRoute,
   FestivaisRoute: FestivaisRoute,
   FigurinosRoute: FigurinosRoute,
+  ImportacoesRoute: ImportacoesRoute,
   OrdemRoute: OrdemRoute,
   PagamentosRoute: PagamentosRoute,
   ProfessoresRoute: ProfessoresRoute,

@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import React, { useState, useMemo } from 'react'
-import { Calendar, Plus, GripVertical, AlertTriangle, CheckCircle, ArrowUp, ArrowDown, Trash2, Clock, ListOrdered, Printer } from 'lucide-react'
+import { Calendar, Plus, GripVertical, AlertTriangle, CheckCircle, ArrowUp, ArrowDown, Trash2, Clock, ListOrdered, Printer, RefreshCw } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 
@@ -26,7 +26,7 @@ function TimelinePage() {
   // Set default festival
   React.useEffect(() => {
     if (festivals && festivals.length > 0 && !selectedFestival) {
-      setSelectedFestival(festivals[0].id)
+      setTimeout(() => setSelectedFestival(festivals[0].id), 0)
     }
   }, [festivals, selectedFestival])
 
@@ -47,6 +47,7 @@ function TimelinePage() {
             name,
             duration,
             choreography_dancers (
+              is_exempt,
               dancers (
                 id,
                 name
@@ -153,15 +154,51 @@ function TimelinePage() {
     })
   }
 
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      if (!timelineItems || timelineItems.length === 0) return
+      
+      const choreoIds = timelineItems.map(item => item.choreography_id).filter(Boolean)
+      if (choreoIds.length === 0) return
+      
+      for (const cId of choreoIds) {
+        // Pega as turmas vinculadas à coreografia
+        const { data: classesData } = await supabase.from('choreography_classes').select('class_id').eq('choreography_id', cId)
+        const classIds = classesData?.map(c => c.class_id) || []
+        if (classIds.length === 0) continue
+        
+        // Pega todos os bailarinos dessas turmas
+        const { data: dancersData } = await supabase.from('dancer_classes').select('dancer_id').in('class_id', classIds)
+        const classDancerIds = Array.from(new Set(dancersData?.map(d => d.dancer_id) || []))
+        
+        // Pega elenco atual (incluindo is_exempt=true)
+        const { data: existingDancers } = await supabase.from('choreography_dancers').select('dancer_id').eq('choreography_id', cId)
+        const existingIds = existingDancers?.map(e => e.dancer_id) || []
+        
+        // Insere apenas os que não existem ainda
+        const missingIds = classDancerIds.filter(id => !existingIds.includes(id))
+        
+        if (missingIds.length > 0) {
+          const toInsert = missingIds.map(dId => ({ choreography_id: cId, dancer_id: dId, is_exempt: false }))
+          await supabase.from('choreography_dancers').insert(toInsert)
+        }
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['timeline', selectedFestival] })
+      alert("Sincronização concluída! Os novos alunos foram adicionados aos elencos e os conflitos foram atualizados.")
+    }
+  })
+
   // --- Conflict Calculation Algorithm ---
   const getConflicts = (currentIndex: number) => {
     if (!timelineItems || currentIndex === 0) return { status: 'green', messages: [] }
     
     const currentItem = timelineItems[currentIndex]
-    const currentDancers = currentItem.choreographies?.choreography_dancers?.map((c: any) => c.dancers?.name).filter(Boolean) || []
+    const currentDancers = currentItem.choreographies?.choreography_dancers?.filter((c: any) => c.is_exempt !== true)?.map((c: any) => c.dancers?.name).filter(Boolean) || []
     
     const prevItem1 = timelineItems[currentIndex - 1] // 0 interval (back to back)
-    const prev1Dancers = prevItem1?.choreographies?.choreography_dancers?.map((c: any) => c.dancers?.name).filter(Boolean) || []
+    const prev1Dancers = prevItem1?.choreographies?.choreography_dancers?.filter((c: any) => c.is_exempt !== true)?.map((c: any) => c.dancers?.name).filter(Boolean) || []
     
     const intersection1 = currentDancers.filter((d: string) => prev1Dancers.includes(d))
     
@@ -178,7 +215,7 @@ function TimelinePage() {
     for (let t = 2; t <= tolerance + 1; t++) {
       if (currentIndex >= t) {
         const prevT = timelineItems[currentIndex - t]
-        const prevTDancers = prevT?.choreographies?.choreography_dancers?.map((c: any) => c.dancers?.name).filter(Boolean) || []
+        const prevTDancers = prevT?.choreographies?.choreography_dancers?.filter((c: any) => c.is_exempt !== true)?.map((c: any) => c.dancers?.name).filter(Boolean) || []
         const intersectionT = currentDancers.filter((d: string) => prevTDancers.includes(d))
         
         if (intersectionT.length > 0) {
@@ -203,6 +240,15 @@ function TimelinePage() {
           <p className="text-gray-500">Organize a ordem do espetáculo e detecte conflitos de elenco.</p>
         </div>
         <div className="flex gap-3 print-hidden">
+          <button 
+            onClick={() => syncMutation.mutate()}
+            disabled={syncMutation.isPending || !timelineItems || timelineItems.length === 0}
+            title="Puxa os alunos das turmas para as coreografias (ignorando alunos removidos manualmente)"
+            className="flex items-center gap-2 bg-primary/10 text-primary px-6 py-2.5 rounded-xl font-medium hover:bg-primary/20 transition-all shadow-sm disabled:opacity-50"
+          >
+            <RefreshCw size={20} className={syncMutation.isPending ? 'animate-spin' : ''} />
+            Sincronizar Elencos
+          </button>
           <button 
             onClick={() => window.print()}
             disabled={!timelineItems || timelineItems.length === 0}

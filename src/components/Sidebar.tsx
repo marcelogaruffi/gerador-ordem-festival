@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
-import { LayoutDashboard, Calendar, Users, Music, Shirt, AlertTriangle, Settings, LogOut, ListOrdered, PlaySquare, Link2, GraduationCap, UserCheck, DollarSign, Wallet, ChevronDown, ChevronRight, PieChart } from 'lucide-react'
+import { LayoutDashboard, Calendar, Users, Music, Shirt, AlertTriangle, Settings, LogOut, ListOrdered, PlaySquare, Link2, GraduationCap, UserCheck, DollarSign, Wallet, ChevronDown, ChevronRight, PieChart, UploadCloud } from 'lucide-react'
 
 export function Sidebar() {
   const location = useLocation()
@@ -16,6 +16,7 @@ export function Sidebar() {
     { to: '/figurinos', icon: Shirt, label: 'Figurinos' },
     { to: '/timeline', icon: ListOrdered, label: 'Timeline' },
     { to: '/apresentacao', icon: PlaySquare, label: 'Apresentação' },
+    { to: '/importacoes', icon: UploadCloud, label: 'Importações' },
   ]
 
   return (

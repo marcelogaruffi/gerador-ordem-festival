@@ -493,7 +493,7 @@ function CastManagerModal({ choreoId, choreoName, onClose }: { choreoId: string,
       // Buscar elenco
       const { data: castData, error: castError } = await supabase
         .from('choreography_dancers')
-        .select('dancers(id, name)')
+        .select('is_exempt, dancers(id, name)')
         .eq('choreography_id', choreoId)
       if (castError) throw castError
 
@@ -504,7 +504,9 @@ function CastManagerModal({ choreoId, choreoName, onClose }: { choreoId: string,
         .eq('choreography_id', choreoId)
       if (classesError) throw classesError
 
-      const castIds = castData.map(c => c.dancers?.id).filter(Boolean)
+      // Filtrar apenas os que não estão exempt
+      const activeCast = castData.filter(c => c.is_exempt !== true)
+      const castIds = activeCast.map(c => c.dancers?.id).filter(Boolean)
       const classIds = classesData.map(c => c.class_id)
       
       return { castIds, classIds }
@@ -540,18 +542,40 @@ function CastManagerModal({ choreoId, choreoName, onClose }: { choreoId: string,
   // Salvar elenco
   const saveCastMutation = useMutation({
     mutationFn: async () => {
-      // Deleta atual
-      const { error: delError } = await supabase.from('choreography_dancers').delete().eq('choreography_id', choreoId)
-      if (delError) throw delError
+      // Pega o que está no banco hoje
+      const { data: existingData } = await supabase.from('choreography_dancers')
+        .select('dancer_id').eq('choreography_id', choreoId)
+      
+      const existingIds = existingData?.map(e => e.dancer_id) || []
+      
+      const toInsert = localCast.filter(id => !existingIds.includes(id)).map(id => ({
+        choreography_id: choreoId, dancer_id: id, is_exempt: false
+      }))
+      const toUpdateFalse = localCast.filter(id => existingIds.includes(id))
+      const toUpdateTrue = existingIds.filter(id => !localCast.includes(id))
 
-      // Insere novos
-      if (localCast.length > 0) {
-        const links = localCast.map(dId => ({
-          choreography_id: choreoId,
-          dancer_id: dId
-        }))
-        const { error: insError } = await supabase.from('choreography_dancers').insert(links)
-        if (insError) throw insError
+      // Insere quem é novo
+      if (toInsert.length > 0) {
+        const { error: insErr } = await supabase.from('choreography_dancers').insert(toInsert)
+        if (insErr) throw insErr
+      }
+      
+      // Tira da isenção quem voltou pro elenco
+      if (toUpdateFalse.length > 0) {
+        const { error: updErr1 } = await supabase.from('choreography_dancers')
+          .update({ is_exempt: false })
+          .eq('choreography_id', choreoId)
+          .in('dancer_id', toUpdateFalse)
+        if (updErr1) throw updErr1
+      }
+      
+      // Bota na isenção (marca como removido) quem saiu
+      if (toUpdateTrue.length > 0) {
+        const { error: updErr2 } = await supabase.from('choreography_dancers')
+          .update({ is_exempt: true })
+          .eq('choreography_id', choreoId)
+          .in('dancer_id', toUpdateTrue)
+        if (updErr2) throw updErr2
       }
     },
     onSuccess: () => {

@@ -146,6 +146,13 @@ function SettingsPage() {
                     <option value="1">1 Intervalo</option>
                     <option value="2">2 Intervalos</option>
                     <option value="3">3 Intervalos</option>
+                    <option value="4">4 Intervalos</option>
+                    <option value="5">5 Intervalos</option>
+                    <option value="6">6 Intervalos</option>
+                    <option value="7">7 Intervalos</option>
+                    <option value="8">8 Intervalos</option>
+                    <option value="9">9 Intervalos</option>
+                    <option value="10">10 Intervalos</option>
                   </select>
                 </div>
 

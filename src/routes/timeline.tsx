@@ -263,7 +263,25 @@ function TimelinePage() {
             onClick={() => {
               if (!timelineItems || timelineItems.length === 0) return
               const doc = new jsPDF('p', 'pt', 'a4')
-              doc.text("Ordem do Festival", 40, 40)
+              
+              // 1. Cabeçalho (Header)
+              // Aqui você pode colocar a logo em Base64 depois (doc.addImage(logoBase64, 'PNG', 40, 30, 80, 80))
+              
+              doc.setFont("helvetica", "bold")
+              doc.setFontSize(22)
+              doc.setTextColor(122, 0, 25) // primary color #7A0019
+              doc.text("Ordem do Show - Projeto Coxia", 40, 60)
+              
+              doc.setFont("helvetica", "normal")
+              doc.setFontSize(10)
+              doc.setTextColor(100, 100, 100)
+              const today = new Date().toLocaleDateString('pt-BR')
+              doc.text(`Gerado em: ${today}`, 40, 78)
+              
+              // Linha divisória
+              doc.setDrawColor(122, 0, 25)
+              doc.setLineWidth(1.5)
+              doc.line(40, 90, doc.internal.pageSize.getWidth() - 40, 90)
               
               const body = timelineItems.map((item, index) => {
                 const name = item.choreographies?.name || ''
@@ -284,12 +302,43 @@ function TimelinePage() {
               })
 
               autoTable(doc, {
-                startY: 60,
-                head: [['Ordem', 'Coreografia', 'Estilo', 'Duração', 'Elenco']],
+                startY: 110,
+                head: [['#', 'Coreografia', 'Estilo', 'Duração', 'Elenco']],
                 body: body,
+                theme: 'striped',
+                headStyles: {
+                  fillColor: [122, 0, 25], // Vinho (primary)
+                  textColor: 255,
+                  fontStyle: 'bold',
+                  halign: 'center'
+                },
+                columnStyles: {
+                  0: { halign: 'center', cellWidth: 30, fontStyle: 'bold' },
+                  1: { fontStyle: 'bold', cellWidth: 120 },
+                  4: { fontSize: 8, textColor: [80, 80, 80] } // Elenco menor
+                },
+                alternateRowStyles: {
+                  fillColor: [247, 247, 247] // Cinza bem clarinho
+                },
+                styles: {
+                  font: 'helvetica',
+                  fontSize: 10,
+                  cellPadding: 6
+                },
+                didDrawPage: (data) => {
+                  // Rodapé com número da página
+                  const pageCount = doc.internal.getNumberOfPages()
+                  doc.setFontSize(8)
+                  doc.setTextColor(150)
+                  doc.text(
+                    `Página ${data.pageNumber}`,
+                    data.settings.margin.left,
+                    doc.internal.pageSize.getHeight() - 20
+                  )
+                }
               })
               
-              doc.save("Ordem_Festival.pdf")
+              doc.save("Ordem_Festival_Elegante.pdf")
             }}
             disabled={!timelineItems || timelineItems.length === 0}
             className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-6 py-2.5 rounded-xl font-medium hover:bg-gray-50 transition-all shadow-sm disabled:opacity-50"

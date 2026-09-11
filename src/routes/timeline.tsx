@@ -294,7 +294,6 @@ function TimelinePage() {
                 
                 return [
                   (index + 1).toString(),
-                  '', // Espaço para a foto/miniatura
                   name,
                   style,
                   duration,
@@ -304,7 +303,7 @@ function TimelinePage() {
 
               autoTable(doc, {
                 startY: 110,
-                head: [['#', 'Figurino', 'Coreografia', 'Estilo', 'Duração', 'Elenco']],
+                head: [['#', 'Coreografia', 'Estilo', 'Duração', 'Elenco']],
                 body: body,
                 theme: 'striped',
                 headStyles: {
@@ -314,38 +313,9 @@ function TimelinePage() {
                   halign: 'center'
                 },
                 columnStyles: {
-                  0: { halign: 'center', cellWidth: 30, fontStyle: 'bold', valign: 'middle' },
-                  1: { halign: 'center', cellWidth: 50, valign: 'middle' }, // Coluna Figurino
-                  2: { fontStyle: 'bold', cellWidth: 100, valign: 'middle' },
-                  3: { valign: 'middle' },
-                  4: { valign: 'middle' },
-                  5: { fontSize: 8, textColor: [80, 80, 80], valign: 'middle' } // Elenco menor
-                },
-                bodyStyles: {
-                  minCellHeight: 35 // Altura maior para caber a foto
-                },
-                didDrawCell: (data) => {
-                  // Desenhar a "foto" (miniatura) na coluna 1
-                  if (data.section === 'body' && data.column.index === 1) {
-                    const radius = 12
-                    const x = data.cell.x + data.cell.width / 2
-                    const y = data.cell.y + data.cell.height / 2
-                    
-                    // Gerar cor aleatória pastél para simular a foto
-                    const r = (data.row.index * 45) % 150 + 100
-                    const g = (data.row.index * 85) % 150 + 100
-                    const b = (data.row.index * 25) % 150 + 100
-                    
-                    doc.setFillColor(r, g, b)
-                    doc.circle(x, y, radius, 'F')
-                    doc.setDrawColor(200, 200, 200)
-                    doc.circle(x, y, radius, 'S') // borda
-                    
-                    // Um pequeno texto para fingir que é uma imagem
-                    doc.setFontSize(6)
-                    doc.setTextColor(50)
-                    doc.text("FOTO", x - 7, y + 2)
-                  }
+                  0: { halign: 'center', cellWidth: 30, fontStyle: 'bold' },
+                  1: { fontStyle: 'bold', cellWidth: 120 },
+                  4: { fontSize: 8, textColor: [80, 80, 80] } // Elenco menor
                 },
                 alternateRowStyles: {
                   fillColor: [247, 247, 247] // Cinza bem clarinho
